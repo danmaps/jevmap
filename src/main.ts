@@ -54,8 +54,7 @@ if (!app) throw new Error("App root not found.");
 
 app.innerHTML = `
   <header class="topbar">
-    <div class="brand"><a href="https://dannymcvey.com/">DANNY MCVEY</a> <span>/ <a href="/jevmap/">JEVMAP</a></span></div>
-    <span class="status"><i></i><span id="mode-label">JEV SERVER PROXY</span></span>
+    <a class="brand" href="https://dannymcvey.com/">DANNY MCVEY</a>
   </header>
   <main class="shell">
     <section class="intro">
@@ -64,7 +63,7 @@ app.innerHTML = `
       <p class="lede">Jev chooses. Spatial tools execute.<br />Explore every decision on the map.</p>
     </section>
     <section class="workspace">
-      <div class="map-wrap"><div id="map" aria-label="JevMap demo map"></div><div class="map-label">LOS ANGELES <span> / LIVE MAP</span></div></div>
+      <div class="map-wrap"><div id="map" aria-label="Map of Los Angeles"></div></div>
       <aside class="panel">
         <div class="panel-header">
           <h2>Spatial task</h2>
@@ -116,7 +115,6 @@ const fileStatus = requiredElement<HTMLDivElement>("#file-status");
 const layerList = requiredElement<HTMLDivElement>("#layer-list");
 const receiptSection = requiredElement<HTMLElement>("#receipt-section");
 const receiptList = requiredElement<HTMLDivElement>("#receipt-list");
-const modeLabel = requiredElement<HTMLSpanElement>("#mode-label");
 const exampleStatus = requiredElement<HTMLDivElement>("#example-status");
 
 // Emit the worker and its dependencies under Vite's configured deployment base.
@@ -166,7 +164,6 @@ const mapReady = new Promise<void>((resolve) => {
 });
 
 const jevClient = new JevProxyClient({ model: import.meta.env.VITE_TYPESAFE_MODEL || "jev-latest" });
-modeLabel.textContent = "JEV SERVER PROXY";
 renderInferenceMetrics();
 
 runButton.addEventListener("click", () => void runAnalysis());
