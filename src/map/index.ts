@@ -1,4 +1,4 @@
-import type { Map as MapLibreMap } from "maplibre-gl";
+import type { Map as MapLibreMap, PaddingOptions } from "maplibre-gl";
 import type { FeatureCollection, GeoJsonProperties, Geometry } from "geojson";
 import type { BBox } from "../state/index.js";
 
@@ -17,10 +17,14 @@ export interface MapAdapter {
     data: FeatureCollection<Geometry, GeoJsonProperties>,
     color: string,
   ): void;
+  removeGeoJSONLayer(id: string): void;
 }
 
 export class MapLibreAdapter implements MapAdapter {
-  public constructor(private readonly map: MapLibreMap) {}
+  public constructor(
+    private readonly map: MapLibreMap,
+    private readonly getFitPadding: () => number | PaddingOptions = () => 40,
+  ) {}
 
   public getViewport(): MapViewportState {
     const bounds = this.map.getBounds();
@@ -39,7 +43,7 @@ export class MapLibreAdapter implements MapAdapter {
         [bounds[0], bounds[1]],
         [bounds[2], bounds[3]],
       ],
-      { padding: 40 },
+      { padding: this.getFitPadding() },
     );
   }
 
@@ -82,5 +86,14 @@ export class MapLibreAdapter implements MapAdapter {
         "circle-stroke-width": 1.5,
       },
     });
+  }
+
+  public removeGeoJSONLayer(id: string): void {
+    const sourceId = `jevmap-${id}`;
+    for (const suffix of ["fill", "line", "point"]) {
+      const layerId = `${sourceId}-${suffix}`;
+      if (this.map.getLayer(layerId)) this.map.removeLayer(layerId);
+    }
+    if (this.map.getSource(sourceId)) this.map.removeSource(sourceId);
   }
 }

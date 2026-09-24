@@ -35,6 +35,11 @@ export interface DecisionClient {
 
 export interface BufferDecisionPlan {
   model: string;
+  inference: {
+    durationMs: number;
+    inputTokens?: number;
+    outputTokens?: number;
+  };
   stateHash: string;
   executionStateHash: string;
   question: string;
@@ -73,7 +78,9 @@ export async function createBufferDecisionPlan(
     ),
   };
 
+  const inferenceStarted = performance.now();
   const response = await client.ask(state as unknown as Record<string, unknown>, questions);
+  const inferenceDurationMs = Math.max(0, Math.round(performance.now() - inferenceStarted));
   const action = parseChoiceAnswer(response.answers.action, "action", questions.action.criteria);
   const layer = parseChoiceAnswer(response.answers.layer, "layer", questions.layer.criteria);
   const distance = parseChoiceAnswer(response.answers.distance, "distance", questions.distance.criteria);
@@ -84,6 +91,13 @@ export async function createBufferDecisionPlan(
   const confidence = Math.min(action.confidence, layer.confidence, distance.confidence);
   return {
     model: response.model,
+    inference: {
+      durationMs: inferenceDurationMs,
+      ...(response.usageReported === false ? {} : {
+        inputTokens: response.usage.input_tokens,
+        outputTokens: response.usage.output_tokens,
+      }),
+    },
     stateHash: await hashMapState(state),
     executionStateHash: await hashDecisionInputs(state),
     question: state.intent,
@@ -166,6 +180,7 @@ export function createPendingDecisionReceipt(plan: BufferDecisionPlan): ActionRe
   return createReceipt({
     stateHash: plan.stateHash,
     model: plan.model,
+    inference: plan.inference,
     question: plan.question,
     probabilities: flattenProbabilities(plan.probabilities),
     confidence: plan.confidence,
@@ -211,6 +226,7 @@ export async function executeBufferDecision(
       timestamp: existingReceipt?.timestamp,
       stateHash: plan.stateHash,
       model: plan.model,
+      inference: plan.inference,
       question: plan.question,
       probabilities: flattenProbabilities(plan.probabilities),
       confidence: plan.confidence,

@@ -51,6 +51,7 @@ export type JevAnswer = ChoiceAnswer | NoulAnswer | ScoreAnswer;
 
 export interface SystemOneResponse {
   model: string;
+  usageReported?: boolean;
   answers: Record<string, JevAnswer>;
   usage: {
     input_tokens: number;
@@ -73,10 +74,11 @@ export function parseSystemOneResponse(value: unknown): SystemOneResponse {
 
   return {
     model: value.model,
+    usageReported: Number.isInteger(inputTokens) && Number(inputTokens) >= 0 && Number.isInteger(outputTokens) && Number(outputTokens) >= 0,
     answers: value.answers as Record<string, JevAnswer>,
     usage: {
-      input_tokens: typeof inputTokens === "number" ? inputTokens : 0,
-      output_tokens: typeof outputTokens === "number" ? outputTokens : 0,
+      input_tokens: Number.isInteger(inputTokens) && Number(inputTokens) >= 0 ? Number(inputTokens) : 0,
+      output_tokens: Number.isInteger(outputTokens) && Number(outputTokens) >= 0 ? Number(outputTokens) : 0,
     },
   };
 }

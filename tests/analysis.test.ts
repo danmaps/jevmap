@@ -163,6 +163,18 @@ describe("TypeSafe response validation", () => {
 });
 
 describe("first buffer workflow", () => {
+  it("records request time and usage independently of GIS execution", async () => {
+    const clock = vi.spyOn(performance, "now").mockReturnValueOnce(100).mockReturnValueOnce(350);
+    try {
+      const plan = await createBufferDecisionPlan(makeState(), fakeClient());
+      expect(plan.inference).toEqual({ durationMs: 250, inputTokens: 10, outputTokens: 4 });
+      const pending = createPendingDecisionReceipt(plan);
+      expect(pending.inference).toEqual(plan.inference);
+      expect(pending.execution.durationMs).toBe(0);
+    } finally {
+      clock.mockRestore();
+    }
+  });
   it("executes a high-confidence buffer and records a successful receipt", async () => {
     const state = makeState();
     const plan = await createBufferDecisionPlan(state, fakeClient());

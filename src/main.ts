@@ -1,6 +1,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import * as maplibregl from "maplibre-gl";
+import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import {
   createBufferDecisionPlan,
   createPendingDecisionReceipt,
@@ -10,35 +11,33 @@ import {
   type SpatialData,
 } from "./analysis/index.js";
 import { JevProxyClient } from "./jev/proxy-client.js";
+import { estimateInferenceCost, formatCost, INFERENCE_RATES } from "./inference-cost.js";
 import { MapLibreAdapter } from "./map/index.js";
 import { toReceiptSummary, type ActionReceipt } from "./receipts/index.js";
 import { parseFeatureCollection } from "./state/geojson.js";
 import { summarizeFeatureCollection, type JevMapState, type LayerState } from "./state/index.js";
+import demoPointsJson from "../public/demo/los-angeles-points.geojson?raw";
 
-const roads: SpatialData = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      properties: { name: "Main Street", class: "major road" },
-      geometry: { type: "LineString", coordinates: [[-0.145, 51.515], [-0.115, 51.515], [-0.085, 51.515]] },
-    },
-    {
-      type: "Feature",
-      properties: { name: "North Road", class: "major road" },
-      geometry: { type: "LineString", coordinates: [[-0.115, 51.495], [-0.115, 51.535]] },
-    },
-  ],
-};
+const demoPoints = parseFeatureCollection(demoPointsJson);
 
-const schools: SpatialData = {
-  type: "FeatureCollection",
-  features: [
-    { type: "Feature", properties: { name: "Millbank Primary" }, geometry: { type: "Point", coordinates: [-0.125, 51.518] } },
-    { type: "Feature", properties: { name: "Riverside Academy" }, geometry: { type: "Point", coordinates: [-0.102, 51.528] } },
-    { type: "Feature", properties: { name: "Oakfield School" }, geometry: { type: "Point", coordinates: [-0.078, 51.498] } },
-  ],
-};
+type ExampleId = "intersect" | "nearest" | "filter" | "select" | "export";
+type ExampleDefinition = { id: ExampleId; label: string; description: string; prompt: string; note: string; layers: Array<{ id: string; name: string; data: SpatialData }> };
+
+const laCoreArea: SpatialData = { type: "FeatureCollection", features: [{ type: "Feature", properties: { name: "Downtown study area", dataset: "Synthetic demo data" }, geometry: { type: "Polygon", coordinates: [[[-118.32, 34.02], [-118.20, 34.02], [-118.20, 34.10], [-118.32, 34.10], [-118.32, 34.02]]] } }] };
+const laLandmarks: SpatialData = { type: "FeatureCollection", features: [
+  { type: "Feature", properties: { name: "Civic landmark", kind: "civic" }, geometry: { type: "Point", coordinates: [-118.243, 34.053] } },
+  { type: "Feature", properties: { name: "Park landmark", kind: "park" }, geometry: { type: "Point", coordinates: [-118.29, 34.09] } },
+  { type: "Feature", properties: { name: "Transit landmark", kind: "transit" }, geometry: { type: "Point", coordinates: [-118.265, 34.04] } },
+] };
+const categorizedPoints: SpatialData = { type: "FeatureCollection", features: demoPoints.features.map((feature, index) => ({ ...feature, properties: { ...(feature.properties ?? {}), category: index % 2 === 0 ? "civic" : "residential" } })) };
+
+const EXAMPLES: readonly ExampleDefinition[] = [
+  { id: "intersect", label: "Intersect", description: "points × study area", prompt: "Intersect the Los Angeles demo points with the downtown study area.", note: "Preview: two layers are loaded for a future intersection operation.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }, { id: "la-core-area", name: "Downtown study area", data: laCoreArea }] },
+  { id: "nearest", label: "Nearest", description: "points → landmarks", prompt: "Find the nearest landmark for each Los Angeles demo point.", note: "Preview: point and landmark layers are loaded for nearest-feature analysis.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }, { id: "la-landmarks", name: "Synthetic landmarks", data: laLandmarks }] },
+  { id: "filter", label: "Filter", description: "category = civic", prompt: "Filter the Los Angeles demo points to civic features.", note: "Preview: every point has a category field for deterministic filtering.", layers: [{ id: "la-demo-points", name: "Categorized demo points", data: categorizedPoints }] },
+  { id: "select", label: "Select", description: "choose features", prompt: "Select the Hollywood and Downtown demo points.", note: "Preview: the point layer is loaded for a map selection workflow.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }] },
+  { id: "export", label: "Export", description: "write GeoJSON", prompt: "Export the Los Angeles demo points as GeoJSON.", note: "Preview: the current layer is ready for the implemented export tool.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }] },
+];
 
 const COLORS = ["#e1a84b", "#f16b5b", "#82a9a1", "#b695ce", "#8fbf6e"];
 const layerData = new Map<string, SpatialData>();
@@ -53,35 +52,59 @@ if (!app) throw new Error("App root not found.");
 
 app.innerHTML = `
   <header class="topbar">
-    <a class="brand" href="/jevmap/">DANNY MCVEY <span>/ JEVMAP</span></a>
+    <div class="brand"><a href="https://dannymcvey.com/">DANNY MCVEY</a> <span>/ <a href="/jevmap/">JEVMAP</a></span></div>
     <span class="status"><i></i><span id="mode-label">JEV SERVER PROXY</span></span>
   </header>
   <main class="shell">
     <section class="intro">
-      <p class="eyebrow">SPATIAL DECISION ENGINE · 01</p>
+      <p class="eyebrow">LOS ANGELES · SPATIAL DECISION DEMO</p>
       <h1>Ask the map.<br /><em>Keep control.</em></h1>
-      <p class="lede">Jev chooses from bounded spatial actions. Your application owns the geometry, validation, and execution.</p>
+      <p class="lede">Jev chooses. Spatial tools execute.<br />Explore every decision on the map.</p>
     </section>
     <section class="workspace">
-      <div class="map-wrap"><div id="map" aria-label="JevMap demo map"></div><div class="map-label">LIVE MAP STATE</div></div>
+      <div class="map-wrap"><div id="map" aria-label="JevMap demo map"></div><div class="map-label">LOS ANGELES <span> / LIVE MAP</span></div></div>
       <aside class="panel">
+        <div class="panel-header">
+          <h2>Spatial task</h2>
+          <button id="panel-toggle" type="button" aria-expanded="true" aria-controls="panel-content">Hide panel</button>
+        </div>
+        <div id="panel-content">
         <div class="panel-kicker">WORKBENCH / TASK</div>
-        <h2>What should we find?</h2>
+        <section class="examples" aria-labelledby="examples-heading">
+          <div class="examples-heading"><span id="examples-heading" class="panel-kicker">TRY A TOOL</span><small>load an example</small></div>
+          <div class="example-grid">${EXAMPLES.map((example) => `<button class="example-button" type="button" data-example="${example.id}"><b>${example.label}</b><span>${example.description}</span></button>`).join("")}</div>
+          <div id="example-status" class="example-status" aria-live="polite">Buffer is the executable demo; these buttons preview the other Workbench tools.</div>
+        </section>
         <label class="sr-only" for="goal">Spatial goal</label>
-        <textarea id="goal">Create a 250 meter buffer around the major roads.</textarea>
+        <textarea id="goal">Create a 1 kilometer buffer around the Los Angeles demo points.</textarea>
         <label class="upload" for="geojson-files">Add GeoJSON layers<input id="geojson-files" type="file" accept=".json,.geojson,application/json,application/geo+json" multiple /></label>
-        <div id="file-status" class="file-status" aria-live="polite">Sample layers are ready.</div>
+        <div id="file-status" class="file-status" aria-live="polite">8 synthetic Los Angeles demo points are ready.</div>
+        <a class="demo-download" href="${import.meta.env.BASE_URL}demo/los-angeles-points.geojson" download>Download demo GeoJSON ↗</a>
         <button id="run" type="button">Ask Jev <span>↗</span></button>
         <div id="result" class="result" aria-live="polite" aria-busy="false">
           <div class="result-empty">Choose a spatial goal and ask for a buffer.<br /><span>Every operation is validated before it runs.</span></div>
         </div>
         <section class="layers"><div class="panel-kicker">MAP STATE</div><div id="layer-list"></div></section>
+        <section id="inference-metrics" class="inference-metrics" aria-label="Inference cost and speed"></section>
         <section id="receipt-section" class="receipts" hidden><div class="panel-kicker">DECISION RECEIPTS</div><div id="receipt-list"></div></section>
+        <details class="architecture-panel">
+          <summary>How this map works <span>↗</span></summary>
+          <div class="loop"><span>MAP STATE</span><b>→</b><span>JEV DECISION</span><b>→</b><span>SPATIAL TOOLS</span></div>
+          <p class="architecture-note">Designed around the <a href="https://workbench.dannymcvey.com/" target="_blank" rel="noopener noreferrer">Spatial Workbench</a> pattern: Jev chooses a bounded action, validated spatial tools compute the geometry, and the map displays the result. This demo implements that tool layer locally with Turf.js and renders it with MapLibre; the separate Spatial Workbench service is not connected.</p>
+          <p class="footnote">Jev runs through a server-side proxy. The API key stays out of your browser.</p>
+        </details>
+        </div>
       </aside>
     </section>
-    <section class="loop"><span>MAP STATE</span><b>→</b><span>CANDIDATES</span><b>→</b><span>JEV DECISION</span><b>→</b><span>VALIDATED EXECUTION</span></section>
-    <p class="footnote">Live Jev requests use the server-side /api/jev proxy. The TypeSafe key stays out of the browser.</p>
   </main>`;
+
+const panelToggle = requiredElement<HTMLButtonElement>("#panel-toggle");
+const panelContent = requiredElement<HTMLDivElement>("#panel-content");
+panelToggle.addEventListener("click", () => {
+  panelContent.hidden = !panelContent.hidden;
+  panelToggle.setAttribute("aria-expanded", String(!panelContent.hidden));
+  panelToggle.textContent = panelContent.hidden ? "Show panel" : "Hide panel";
+});
 
 const goalInput = requiredElement<HTMLTextAreaElement>("#goal");
 const runButton = requiredElement<HTMLButtonElement>("#run");
@@ -92,12 +115,15 @@ const layerList = requiredElement<HTMLDivElement>("#layer-list");
 const receiptSection = requiredElement<HTMLElement>("#receipt-section");
 const receiptList = requiredElement<HTMLDivElement>("#receipt-list");
 const modeLabel = requiredElement<HTMLSpanElement>("#mode-label");
+const exampleStatus = requiredElement<HTMLDivElement>("#example-status");
 
+// Emit the worker and its dependencies under Vite's configured deployment base.
+maplibregl.setWorkerUrl(mapWorkerUrl);
 const map = new maplibregl.Map({
   container: "map",
-  center: [-0.11, 51.515],
-  zoom: 13.2,
-  attributionControl: false,
+  center: [-118.29, 34.045],
+  zoom: 10.5,
+  attributionControl: { compact: true },
   style: {
     version: 8,
     sources: {
@@ -105,17 +131,33 @@ const map = new maplibregl.Map({
         type: "raster",
         tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
         tileSize: 256,
-        attribution: "© OpenStreetMap contributors",
+        attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a>',
       },
     },
-    layers: [{ id: "osm", type: "raster", source: "osm" }],
+    layers: [{
+      id: "osm-dark",
+      type: "raster",
+      source: "osm",
+      paint: {
+        "raster-saturation": -1,
+        // Invert luminance for dark land and muted, light linework.
+        "raster-brightness-min": 0.32,
+        "raster-brightness-max": 0.055,
+        "raster-contrast": 0.15,
+      },
+    }],
   },
 });
-const mapAdapter = new MapLibreAdapter(map);
+const mapAdapter = new MapLibreAdapter(map, () => {
+  const panel = requiredElement<HTMLElement>(".panel").getBoundingClientRect();
+  const bottomPanel = window.innerWidth <= 760 && window.innerHeight > 520;
+  return bottomPanel
+    ? { top: Math.min(240, window.innerHeight * .29), bottom: window.innerHeight - panel.top + 16, left: 28, right: 28 }
+    : { top: Math.min(260, window.innerHeight * .3), bottom: 60, left: 48, right: window.innerWidth - panel.left + 32 };
+});
 const mapReady = new Promise<void>((resolve) => {
   map.once("load", () => {
-    registerLayer("major-roads", "major-roads", roads);
-    registerLayer("schools", "schools", schools);
+    registerLayer("la-demo-points", "Los Angeles demo points", demoPoints, true);
     renderLayers();
     resolve();
   });
@@ -123,9 +165,34 @@ const mapReady = new Promise<void>((resolve) => {
 
 const jevClient = new JevProxyClient({ model: import.meta.env.VITE_TYPESAFE_MODEL || "jev-latest" });
 modeLabel.textContent = "JEV SERVER PROXY";
+renderInferenceMetrics();
 
 runButton.addEventListener("click", () => void runAnalysis());
 fileInput.addEventListener("change", () => void loadFiles());
+document.querySelectorAll<HTMLButtonElement>("[data-example]").forEach((button) => {
+  button.addEventListener("click", () => void loadExample(button.dataset.example as ExampleId));
+});
+
+async function loadExample(id: ExampleId): Promise<void> {
+  const example = EXAMPLES.find((item) => item.id === id);
+  if (!example) return;
+  await mapReady;
+  finishPendingDecision("The example changed the map state.");
+  for (const layerId of layerStates.keys()) mapAdapter.removeGeoJSONLayer(layerId);
+  layerData.clear();
+  layerStates.clear();
+  receiptHistory.length = 0;
+  activePlan = undefined;
+  pendingReceipt = undefined;
+  for (const layer of example.layers) registerLayer(layer.id, layer.name, layer.data);
+  const firstExtent = [...layerStates.values()].find((layer) => layer.extent)?.extent;
+  if (firstExtent) mapAdapter.fitBounds(firstExtent);
+  goalInput.value = example.prompt;
+  fileStatus.textContent = `${example.layers.length} example layer${example.layers.length === 1 ? "" : "s"} loaded.`;
+  exampleStatus.textContent = example.note;
+  resultElement.innerHTML = `<div class="result-empty">${example.note}<br /><span>Ask Jev is currently wired to the buffer slice.</span></div>`;
+  renderReceipts();
+}
 
 async function runAnalysis(): Promise<void> {
   const intent = goalInput.value.trim();
@@ -328,6 +395,7 @@ function renderReceipts(): void {
 }
 
 function showPlan(plan: BufferDecisionPlan, message: string, allowApproval = false): void {
+  renderInferenceMetrics(plan);
   resultElement.replaceChildren();
   const decision = document.createElement("div");
   decision.className = "decision";
@@ -386,6 +454,33 @@ function showPlan(plan: BufferDecisionPlan, message: string, allowApproval = fal
   }
 
   resultElement.append(decision);
+}
+
+function renderInferenceMetrics(plan?: BufferDecisionPlan): void {
+  const metrics = requiredElement<HTMLElement>("#inference-metrics");
+  const wasOpen = metrics.querySelector("details")?.open ?? false;
+  const inputTokens = plan ? plan.inference.inputTokens : 2000;
+  const isJev = !plan || /^jev(?:-|$)/i.test(plan.model);
+  const cost = inputTokens === undefined || !isJev ? undefined : estimateInferenceCost(inputTokens, 0, INFERENCE_RATES[0]);
+  const latency = plan ? `${(plan.inference.durationMs / 1000).toFixed(2)} s` : "Run to measure";
+  const tokenBudget = inputTokens ?? 2000;
+  metrics.innerHTML = `
+    <div class="panel-kicker">INFERENCE / COST & SPEED</div>
+    <div class="metric-cards">
+      <div><small>${plan ? "This Jev request" : "Jev request time"}</small><strong>${latency}</strong></div>
+      <div><small>${plan ? "Estimated API cost" : "Example API cost"}</small><strong>${formatCost(cost)}</strong></div>
+    </div>
+    <p class="metric-note">${plan ? "Measured round trip, including network and proxy. GIS execution is timed separately." : "Example: 2,000 input tokens. TypeSafe reports 70–500 ms for Jev; your network and request size affect timing."}</p>
+    <details class="cost-comparison" ${wasOpen ? "open" : ""}>
+      <summary>Compare with Luna & Sonnet</summary>
+      <table><caption>Illustrative cost per decision request</caption><thead><tr><th scope="col">Model</th><th scope="col">USD / call</th><th scope="col">Time</th></tr></thead><tbody>
+        ${INFERENCE_RATES.map((rate, index) => `<tr><th scope="row"><a href="${rate.source}" target="_blank" rel="noopener noreferrer">${rate.name}</a></th><td>${index === 0 ? formatCost(cost) : formatCost(estimateInferenceCost(tokenBudget, 300, rate))}</td><td>${index === 0 ? latency : "Not measured"}</td></tr>`).join("")}
+      </tbody></table>
+      <p class="metric-note">${inputTokens === undefined ? "Jev did not report token usage; its cost is unavailable. LLM examples use 2,000 input tokens." : `${tokenBudget.toLocaleString()} input tokens${plan ? " reported by Jev" : " assumed"}.`} Luna and Sonnet estimates reuse that input count plus an assumed 300 output tokens for the decisions and probabilities. Different tokenizers, prompts, and reasoning can change the bill. Standard uncached rates; no tools or reasoning tokens included. Jev output is free.</p>
+      <p class="metric-note">No Luna or Sonnet request was run here; their latency and decision quality on this map task are unbenchmarked.</p>
+      <p class="metric-note"><a href="https://evals.typesafe.ai/" target="_blank" rel="noopener noreferrer">Published workflow context ↗</a>: TypeSafe reports mean times of 0.4 s for Jev, 12.9 s for “Luna,” and 78.1 s for Sonnet 5 across four larger workflows at default reasoning. These are vendor results, not predictions for this call; the overview does not specify Luna’s version.</p>
+      <p class="metric-note">Pricing checked September 24, 2026. Model links above cite provider rates. <a href="https://typesafe.ai/blog/introducing-system-one-models-and-jev" target="_blank" rel="noopener noreferrer">Jev pricing and speed source ↗</a></p>
+    </details>`;
 }
 
 function appendProbabilityGroup(

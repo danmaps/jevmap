@@ -3,6 +3,7 @@ export interface ActionReceipt {
   timestamp: string;
   stateHash: string;
   model: string;
+  inference?: { durationMs: number; inputTokens?: number; outputTokens?: number };
   question: string;
   probabilities: Record<string, number>;
   confidence: number;

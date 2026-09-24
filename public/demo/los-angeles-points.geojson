@@ -1,0 +1,13 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    { "type": "Feature", "id": "la-01", "properties": { "name": "Downtown demo point", "dataset": "Synthetic demo data" }, "geometry": { "type": "Point", "coordinates": [-118.245, 34.052] } },
+    { "type": "Feature", "id": "la-02", "properties": { "name": "Echo Park demo point", "dataset": "Synthetic demo data" }, "geometry": { "type": "Point", "coordinates": [-118.26, 34.078] } },
+    { "type": "Feature", "id": "la-03", "properties": { "name": "Koreatown demo point", "dataset": "Synthetic demo data" }, "geometry": { "type": "Point", "coordinates": [-118.302, 34.062] } },
+    { "type": "Feature", "id": "la-04", "properties": { "name": "Hollywood demo point", "dataset": "Synthetic demo data" }, "geometry": { "type": "Point", "coordinates": [-118.328, 34.101] } },
+    { "type": "Feature", "id": "la-05", "properties": { "name": "Culver City demo point", "dataset": "Synthetic demo data" }, "geometry": { "type": "Point", "coordinates": [-118.396, 34.022] } },
+    { "type": "Feature", "id": "la-06", "properties": { "name": "Inglewood demo point", "dataset": "Synthetic demo data" }, "geometry": { "type": "Point", "coordinates": [-118.353, 33.962] } },
+    { "type": "Feature", "id": "la-07", "properties": { "name": "South Los Angeles demo point", "dataset": "Synthetic demo data" }, "geometry": { "type": "Point", "coordinates": [-118.281, 33.989] } },
+    { "type": "Feature", "id": "la-08", "properties": { "name": "Boyle Heights demo point", "dataset": "Synthetic demo data" }, "geometry": { "type": "Point", "coordinates": [-118.211, 34.038] } }
+  ]
+}
