@@ -3,7 +3,7 @@ import {
   actionCriteria,
   DEFAULT_DISTANCE_CANDIDATES,
   distanceCriteria,
-  generateBufferCandidates,
+  generateActionCandidates,
   layerCriteria,
   type DistanceCandidate,
 } from "../candidates/index.js";
@@ -58,19 +58,19 @@ export async function createBufferDecisionPlan(
   client: DecisionClient,
   policy?: DecisionPolicy,
 ): Promise<BufferDecisionPlan> {
-  const [actionCandidate] = generateBufferCandidates(state);
-  if (!actionCandidate) {
-    throw new Error("Load at least one GeoJSON layer with spatial features before asking for a buffer.");
+  const actionCandidates = generateActionCandidates(state);
+  if (actionCandidates.length === 0) {
+    throw new Error("Load at least one GeoJSON layer with spatial features before asking Jev to choose an operation.");
   }
-
+  const bufferCandidate = actionCandidates.find((candidate) => candidate.id === "buffer");
   const questions = {
     action: choiceQuestion(
-      "Choose the available spatial operation that best advances the user's goal.",
-      actionCriteria([actionCandidate]),
+      "Choose the available Workbench operation that best advances the user's goal.",
+      actionCriteria(actionCandidates),
     ),
     layer: choiceQuestion(
-      "Choose one eligible input layer to buffer. Use the goal, geometry type, and layer summary.",
-      layerCriteria(state, actionCandidate.eligibleLayerIds),
+      "Choose one eligible input layer for the selected Workbench operation.",
+      layerCriteria(state, bufferCandidate?.eligibleLayerIds ?? state.layers.map((layer) => layer.id)),
     ),
     distance: choiceQuestion(
       "Choose the most appropriate buffer distance from the legal candidates for the user's goal.",
@@ -86,8 +86,6 @@ export async function createBufferDecisionPlan(
   const distance = parseChoiceAnswer(response.answers.distance, "distance", questions.distance.criteria);
   const distanceCandidate = DEFAULT_DISTANCE_CANDIDATES.find((candidate) => candidate.id === distance.choice);
   if (!distanceCandidate) throw new Error("The selected buffer distance is not available.");
-  if (action.choice !== "buffer") throw new Error("The selected spatial operation is not implemented.");
-
   const confidence = Math.min(action.confidence, layer.confidence, distance.confidence);
   return {
     model: response.model,

@@ -105,7 +105,7 @@ VITE_TYPESAFE_MODEL=jev-latest
 
 The browser sends bounded `choice` questions to `/api/jev`. The server-side proxy owns the TypeSafe credential. If the route is missing, the app displays an actionable proxy error. Never put a TypeSafe API key in a Vite environment variable or browser build.
 
-The demo opens over Los Angeles with a muted dark OpenStreetMap basemap and eight synthetic sample points. The default task creates a 1-kilometer buffer around those points. The same preloaded dataset is available from **Download demo GeoJSON**, with its source in `public/demo/los-angeles-points.geojson`; these are illustrative points, not real facilities. Use **Add GeoJSON layers** to load additional FeatureCollections. The current vertical slice asks Jev to choose an operation, source layer, and legal buffer distance. High-confidence choices run automatically, medium-confidence choices wait for approval, and low-confidence choices produce a request for more context. Every decision and execution outcome is available in the receipt panel.
+The demo opens over Los Angeles with a muted dark OpenStreetMap basemap and eight synthetic sample points. The default task creates a 1-kilometer buffer around those points. The same preloaded dataset is available from **Download demo GeoJSON**, with its source in `public/demo/los-angeles-points.geojson`; these are illustrative points, not real facilities. Use **Add GeoJSON layers** to load additional FeatureCollections. Jev now receives the full bounded tool catalog (Buffer, Intersect, Nearest, Filter, Select, and Export) and chooses the operation before the validated local preview runs. Buffer keeps the confidence gate; deterministic previews for the other tools display the selected result while their confidence remains visible. Every decision and execution outcome is available in the receipt panel.
 
 ## Inference cost and speed
 
@@ -115,4 +115,4 @@ The comparison uses GPT-6 Luna ($0.10/$0.50 input/output per million tokens) and
 
 ## Implementation status
 
-The first vertical slice is a bounded GeoJSON-to-buffer workflow. Intersect, Nearest, Filter, Select, and workflow continuation remain future steps.
+The demo executes the bounded GeoJSON workflow locally. Jev chooses among the six registered operations; Buffer is the production confidence-gated path, while the other operations currently run as deterministic local previews.

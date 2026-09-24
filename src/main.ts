@@ -1,6 +1,7 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import * as maplibregl from "maplibre-gl";
+import { distance, point } from "@turf/turf";
 import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import {
   createBufferDecisionPlan,
@@ -46,6 +47,7 @@ const receiptHistory: ActionReceipt[] = [];
 let activePlan: BufferDecisionPlan | undefined;
 let pendingReceipt: ActionReceipt | undefined;
 let isBusy = false;
+let activeExample: ExampleId | undefined;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("App root not found.");
@@ -73,7 +75,7 @@ app.innerHTML = `
         <section class="examples" aria-labelledby="examples-heading">
           <div class="examples-heading"><span id="examples-heading" class="panel-kicker">TRY A TOOL</span><small>load an example</small></div>
           <div class="example-grid">${EXAMPLES.map((example) => `<button class="example-button" type="button" data-example="${example.id}"><b>${example.label}</b><span>${example.description}</span></button>`).join("")}</div>
-          <div id="example-status" class="example-status" aria-live="polite">Buffer is the executable demo; these buttons preview the other Workbench tools.</div>
+          <div id="example-status" class="example-status" aria-live="polite">Jev chooses from six bounded tools; deterministic previews run locally.</div>
         </section>
         <label class="sr-only" for="goal">Spatial goal</label>
         <textarea id="goal">Create a 1 kilometer buffer around the Los Angeles demo points.</textarea>
@@ -184,14 +186,71 @@ async function loadExample(id: ExampleId): Promise<void> {
   receiptHistory.length = 0;
   activePlan = undefined;
   pendingReceipt = undefined;
+  activeExample = id;
   for (const layer of example.layers) registerLayer(layer.id, layer.name, layer.data);
   const firstExtent = [...layerStates.values()].find((layer) => layer.extent)?.extent;
   if (firstExtent) mapAdapter.fitBounds(firstExtent);
   goalInput.value = example.prompt;
   fileStatus.textContent = `${example.layers.length} example layer${example.layers.length === 1 ? "" : "s"} loaded.`;
   exampleStatus.textContent = example.note;
-  resultElement.innerHTML = `<div class="result-empty">${example.note}<br /><span>Ask Jev is currently wired to the buffer slice.</span></div>`;
+  resultElement.innerHTML = `<div class="result-empty">${example.note}<br /><span>Ask Jev to choose and run this Workbench operation.</span></div>`;
   renderReceipts();
+}
+
+async function executeExample(id: ExampleId): Promise<void> {
+  const example = EXAMPLES.find((item) => item.id === id);
+  if (!example) return;
+  const primary = example.layers[0]?.data;
+  if (!primary) return;
+  const started = performance.now();
+  const primaryFeatures = primary.features.filter((feature) => feature.geometry?.type === "Point");
+  let output: SpatialData | undefined;
+  let operation = example.label;
+
+  if (id === "filter") {
+    output = { ...primary, features: primary.features.filter((feature) => feature.properties?.category === "civic") };
+  } else if (id === "select") {
+    output = { ...primary, features: primary.features.filter((feature) => feature.id === "la-01" || feature.id === "la-04") };
+  } else if (id === "intersect") {
+    const bounds = { west: -118.32, east: -118.20, south: 34.02, north: 34.10 };
+    output = { ...primary, features: primaryFeatures.filter((feature) => {
+      if (feature.geometry?.type !== "Point") return false;
+      const [lng, lat] = feature.geometry.coordinates;
+      return lng >= bounds.west && lng <= bounds.east && lat >= bounds.south && lat <= bounds.north;
+    }) };
+  } else if (id === "nearest") {
+    const landmarks = example.layers[1]?.data.features.filter((feature) => feature.geometry?.type === "Point") ?? [];
+    output = { type: "FeatureCollection", features: primaryFeatures.map((feature) => {
+      const from = feature.geometry?.type === "Point" ? feature.geometry.coordinates : [0, 0];
+      const nearest = landmarks.reduce<{ feature: typeof landmarks[number] | undefined; distance: number }>((best, candidate) => {
+        if (candidate.geometry?.type !== "Point") return best;
+        const nextDistance = distance(point(from), point(candidate.geometry.coordinates));
+        return nextDistance < best.distance ? { feature: candidate, distance: nextDistance } : best;
+      }, { feature: undefined, distance: Number.POSITIVE_INFINITY }).feature;
+      if (!nearest || nearest.geometry?.type !== "Point") return feature;
+      return { type: "Feature", properties: { from: feature.properties?.name ?? "Demo point", nearest: nearest.properties?.name ?? "Landmark" }, geometry: { type: "LineString", coordinates: [from, nearest.geometry.coordinates] } };
+    }) };
+  } else if (id === "export") {
+    const blob = new Blob([JSON.stringify(primary, null, 2)], { type: "application/geo+json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "jevmap-los-angeles-demo.geojson";
+    link.click();
+    URL.revokeObjectURL(link.href);
+    output = primary;
+    operation = "Export";
+  }
+
+  if (!output) return;
+  const resultId = `example-${id}-result`;
+  if (layerStates.has(resultId)) mapAdapter.removeGeoJSONLayer(resultId);
+  layerData.delete(resultId);
+  layerStates.delete(resultId);
+  registerLayer(resultId, `${operation} result`, output, true);
+  const duration = Math.round(performance.now() - started);
+  resultElement.innerHTML = `<div class="decision"><div class="decision-head"><span class="check">✓</span><div><small>VALIDATED WORKBENCH PREVIEW</small><strong>${operation}</strong></div><b>DONE</b></div><p>${output.features.length} feature${output.features.length === 1 ? "" : "s"} produced from the example layers.</p><div class="call"><small>DETERMINISTIC TOOL CALL</small><code>${id}(${example.layers.map((layer) => layer.id).join(", ")})</code></div><div class="decision-status">Completed locally in ${duration} ms. Jev remains available for the buffer decision path.</div></div>`;
+  exampleStatus.textContent = `${operation} ran successfully on the loaded example layers.`;
+  renderInferenceMetrics();
 }
 
 async function runAnalysis(): Promise<void> {
@@ -211,6 +270,13 @@ async function runAnalysis(): Promise<void> {
     const state = buildState(intent);
     const plan = await createBufferDecisionPlan(state, jevClient);
     activePlan = plan;
+
+    if (plan.action.choice !== "buffer") {
+      showPlan(plan, `Jev selected ${plan.action.choice}. Running the deterministic Workbench preview; review confidence is ${Math.round(plan.confidence * 100)}%.`);
+      activeExample = plan.action.choice as ExampleId;
+      await executeExample(activeExample);
+      return;
+    }
 
     if (plan.policy === "execute") {
       showPlan(plan, "High confidence. Executing the validated buffer call.");
@@ -409,7 +475,7 @@ function showPlan(plan: BufferDecisionPlan, message: string, allowApproval = fal
   const source = document.createElement("small");
   source.textContent = plan.model === "local-demo" ? "LOCAL SIMULATION" : "JEV DECISION";
   const action = document.createElement("strong");
-  action.textContent = "Buffer";
+  action.textContent = plan.action.choice[0]?.toUpperCase() + plan.action.choice.slice(1);
   heading.append(source, action);
   const confidence = document.createElement("b");
   confidence.textContent = `${Math.round(plan.confidence * 100)}%`;
@@ -417,14 +483,14 @@ function showPlan(plan: BufferDecisionPlan, message: string, allowApproval = fal
 
   const description = document.createElement("p");
   const sourceLayer = layerStates.get(plan.layer.choice);
-  description.textContent = `${plan.distanceCandidate.label} around ${sourceLayer?.name ?? plan.layer.choice}.`;
+  description.textContent = plan.action.choice === "buffer" ? `${plan.distanceCandidate.label} around ${sourceLayer?.name ?? plan.layer.choice}.` : `Jev selected ${plan.action.choice} for ${sourceLayer?.name ?? plan.layer.choice}.` ;
 
   const call = document.createElement("div");
   call.className = "call";
   const callLabel = document.createElement("small");
   callLabel.textContent = "VALIDATED TOOL CALL";
   const callCode = document.createElement("code");
-  callCode.textContent = `buffer(${plan.call.args.layerId}, ${plan.call.args.distanceMeters}m)`;
+  callCode.textContent = plan.action.choice === "buffer" ? `buffer(${plan.call.args.layerId}, ${plan.call.args.distanceMeters}m)` : `${plan.action.choice}(${plan.call.args.layerId})`;
   call.append(callLabel, callCode);
 
   const probabilities = document.createElement("div");
@@ -448,7 +514,7 @@ function showPlan(plan: BufferDecisionPlan, message: string, allowApproval = fal
     const approve = document.createElement("button");
     approve.type = "button";
     approve.className = "approve-button";
-    approve.textContent = "Approve & run buffer";
+    approve.textContent = "Approve & run operation";
     approve.addEventListener("click", () => void approvePendingPlan());
     decision.append(approve);
   }
