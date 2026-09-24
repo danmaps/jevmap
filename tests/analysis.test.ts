@@ -9,7 +9,7 @@ import {
   type SpatialData,
 } from "../src/analysis/index.js";
 import { generateBufferCandidates } from "../src/candidates/index.js";
-import { parseChoiceAnswer, parseSystemOneResponse, TypeSafeClient } from "../src/jev/index.js";
+import { parseChoiceAnswer, parseSystemOneResponse } from "../src/jev/index.js";
 import { JevProxyClient } from "../src/jev/proxy-client.js";
 import { parseFeatureCollection } from "../src/state/geojson.js";
 import { summarizeFeatureCollection, type JevMapState } from "../src/state/index.js";
@@ -121,14 +121,21 @@ describe("TypeSafe response validation", () => {
     expect(() => parseSystemOneResponse({ answers: {} })).toThrow(/malformed/);
   });
 
-  it("posts bounded questions to the System One endpoint", async () => {
-    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => {
-      return new Response(JSON.stringify({ model: "jev", answers: {}, usage: { input_tokens: 1, output_tokens: 1 } }));
-    });
-    const client = new TypeSafeClient({ apiKey: "local-test-key", fetchImpl });
-    await client.ask({ intent: "buffer roads" }, { action: { type: "choice", criteria: { buffer: "Buffer" } } });
-    expect(fetchImpl).toHaveBeenCalledOnce();
-    expect(String(fetchImpl.mock.calls[0]?.[0])).toBe("https://api.typesafe.ai/v1/systemone");
+  it("calls the browser fetch function with its global receiver by default", async () => {
+    const receivers: unknown[] = [];
+    vi.stubGlobal("fetch", vi.fn(function (this: unknown) {
+      receivers.push(this);
+      return Promise.resolve(new Response(JSON.stringify({ model: "jev", answers: {}, usage: {} }), {
+        headers: { "content-type": "application/json" },
+      }));
+    }));
+
+    try {
+      await new JevProxyClient().ask({ intent: "buffer roads" }, {});
+      expect(receivers).toEqual([globalThis]);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("sends decisions through the server-side Jev proxy", async () => {

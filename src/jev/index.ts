@@ -118,53 +118,6 @@ export function parseChoiceAnswer(
   };
 }
 
-export interface TypeSafeClientOptions {
-  apiKey: string;
-  model?: string;
-  baseUrl?: string;
-  fetchImpl?: typeof fetch;
-}
-
-export class TypeSafeClient {
-  private readonly apiKey: string;
-  private readonly model: string;
-  private readonly baseUrl: string;
-  private readonly fetchImpl: typeof fetch;
-
-  public constructor(options: TypeSafeClientOptions) {
-    this.apiKey = options.apiKey;
-    this.model = options.model ?? "jev-latest";
-    this.baseUrl = (options.baseUrl ?? "https://api.typesafe.ai").replace(/\/$/, "");
-    this.fetchImpl = options.fetchImpl ?? fetch;
-  }
-
-  public async ask(
-    state: SystemOneRequest["state"],
-    questions: SystemOneRequest["questions"],
-  ): Promise<SystemOneResponse> {
-    const request: SystemOneRequest = {
-      state,
-      model: this.model,
-      questions,
-    };
-
-    const response = await this.fetchImpl(`${this.baseUrl}/v1/systemone`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(request),
-    });
-
-    if (!response.ok) {
-      throw new Error(`TypeSafe request failed: ${response.status} ${response.statusText}`);
-    }
-
-    return parseSystemOneResponse(await response.json());
-  }
-}
-
 export function choiceQuestion(
   instructions: string,
   criteria: Record<string, unknown>,

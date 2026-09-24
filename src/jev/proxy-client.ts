@@ -16,7 +16,7 @@ export class JevProxyClient implements DecisionClient {
   public constructor(options: JevProxyClientOptions = {}) {
     this.endpoint = options.endpoint ?? "/api/jev";
     this.model = options.model ?? "jev-latest";
-    this.fetchImpl = options.fetchImpl ?? fetch;
+    this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
   }
 
   public async ask(
