@@ -15,6 +15,7 @@ export interface ActionReceipt {
   execution: {
     success: boolean;
     durationMs: number;
+    status?: "pending" | "not-run" | "succeeded" | "failed";
     error?: string;
   };
 }

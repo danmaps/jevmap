@@ -1,4 +1,3 @@
-import { buffer } from "@turf/turf";
 import type { FeatureCollection, GeoJsonProperties, Geometry } from "geojson";
 import type { SpatialToolId } from "../candidates/index.js";
 
@@ -45,6 +44,12 @@ export interface WorkbenchResult {
 }
 
 export function validateWorkbenchCall(call: WorkbenchCall, context: WorkbenchContext): void {
+  if (!call || typeof call !== "object" || !["buffer", "export"].includes(call.tool)) {
+    throw new Error("Unknown workbench tool.");
+  }
+  if (!call.args || typeof call.args !== "object" || typeof call.args.layerId !== "string") {
+    throw new Error("Workbench call requires a layer ID.");
+  }
   if (!context.layers.has(call.args.layerId)) {
     throw new Error(`Unknown layer: ${call.args.layerId}`);
   }
@@ -66,6 +71,7 @@ export async function executeWorkbenchCall(
     return { tool: call.tool, layerId: call.args.layerId, data: input };
   }
 
+  const { buffer } = await import("@turf/turf");
   const output = buffer(input, call.args.distanceMeters, { units: "meters" });
   if (!output) throw new Error("Buffer operation returned no geometry.");
 

@@ -58,6 +58,66 @@ export interface SystemOneResponse {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function parseSystemOneResponse(value: unknown): SystemOneResponse {
+  if (!isRecord(value) || typeof value.model !== "string" || !isRecord(value.answers)) {
+    throw new Error("TypeSafe returned a malformed System One response.");
+  }
+
+  const rawUsage = isRecord(value.usage) ? value.usage : {};
+  const inputTokens = rawUsage.input_tokens;
+  const outputTokens = rawUsage.output_tokens;
+
+  return {
+    model: value.model,
+    answers: value.answers as Record<string, JevAnswer>,
+    usage: {
+      input_tokens: typeof inputTokens === "number" ? inputTokens : 0,
+      output_tokens: typeof outputTokens === "number" ? outputTokens : 0,
+    },
+  };
+}
+
+export function parseChoiceAnswer(
+  value: unknown,
+  questionName: string,
+  criteria: Readonly<Record<string, unknown>>,
+): ChoiceAnswer {
+  if (!isRecord(value) || value.type !== "choice") {
+    throw new Error(`TypeSafe did not return a choice answer for "${questionName}".`);
+  }
+  if (typeof value.choice !== "string" || !Object.hasOwn(criteria, value.choice)) {
+    throw new Error(`TypeSafe returned an unavailable choice for "${questionName}".`);
+  }
+  if (typeof value.confidence !== "number" || !Number.isFinite(value.confidence) || value.confidence < 0 || value.confidence > 1) {
+    throw new Error(`TypeSafe returned invalid confidence for "${questionName}".`);
+  }
+  if (!isRecord(value.probabilities)) {
+    throw new Error(`TypeSafe returned invalid probabilities for "${questionName}".`);
+  }
+
+  const probabilities: Record<string, number> = {};
+  for (const [key, probability] of Object.entries(value.probabilities)) {
+    if (!Object.hasOwn(criteria, key)) {
+      throw new Error(`TypeSafe returned an unknown probability candidate for "${questionName}".`);
+    }
+    if (typeof probability !== "number" || !Number.isFinite(probability) || probability < 0 || probability > 1) {
+      throw new Error(`TypeSafe returned an invalid probability for "${questionName}".`);
+    }
+    probabilities[key] = probability;
+  }
+
+  return {
+    type: "choice",
+    choice: value.choice,
+    confidence: value.confidence,
+    probabilities,
+  };
+}
+
 export interface TypeSafeClientOptions {
   apiKey: string;
   model?: string;
@@ -101,7 +161,7 @@ export class TypeSafeClient {
       throw new Error(`TypeSafe request failed: ${response.status} ${response.statusText}`);
     }
 
-    return (await response.json()) as SystemOneResponse;
+    return parseSystemOneResponse(await response.json());
   }
 }
 

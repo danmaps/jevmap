@@ -1,4 +1,5 @@
 import type { Map as MapLibreMap } from "maplibre-gl";
+import type { FeatureCollection, GeoJsonProperties, Geometry } from "geojson";
 import type { BBox } from "../state/index.js";
 
 export interface MapViewportState {
@@ -11,6 +12,11 @@ export interface MapViewportState {
 export interface MapAdapter {
   getViewport(): MapViewportState;
   fitBounds(bounds: BBox): void;
+  addGeoJSONLayer(
+    id: string,
+    data: FeatureCollection<Geometry, GeoJsonProperties>,
+    color: string,
+  ): void;
 }
 
 export class MapLibreAdapter implements MapAdapter {
@@ -35,5 +41,46 @@ export class MapLibreAdapter implements MapAdapter {
       ],
       { padding: 40 },
     );
+  }
+
+  public addGeoJSONLayer(
+    id: string,
+    data: FeatureCollection<Geometry, GeoJsonProperties>,
+    color: string,
+  ): void {
+    const sourceId = `jevmap-${id}`;
+    const existing = this.map.getSource(sourceId);
+    if (existing) {
+      if ("setData" in existing && typeof existing.setData === "function") existing.setData(data);
+      return;
+    }
+
+    this.map.addSource(sourceId, { type: "geojson", data });
+    this.map.addLayer({
+      id: `${sourceId}-fill`,
+      type: "fill",
+      source: sourceId,
+      filter: ["==", ["geometry-type"], "Polygon"],
+      paint: { "fill-color": color, "fill-opacity": 0.18, "fill-outline-color": color },
+    });
+    this.map.addLayer({
+      id: `${sourceId}-line`,
+      type: "line",
+      source: sourceId,
+      filter: ["==", ["geometry-type"], "LineString"],
+      paint: { "line-color": color, "line-width": 3, "line-opacity": 0.9 },
+    });
+    this.map.addLayer({
+      id: `${sourceId}-point`,
+      type: "circle",
+      source: sourceId,
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: {
+        "circle-color": color,
+        "circle-radius": 6,
+        "circle-stroke-color": "#fff4df",
+        "circle-stroke-width": 1.5,
+      },
+    });
   }
 }
