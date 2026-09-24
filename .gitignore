@@ -1,8 +1,5 @@
 node_modules/
 dist/
-.vite/
-coverage/
 .env
-.env.local
-.DS_Store
-*.log
+.env.*
+!.env.example
