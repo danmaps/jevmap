@@ -2,6 +2,9 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './styles.css';
 import * as maplibregl from 'maplibre-gl';
 import type { FeatureCollection } from 'geojson';
+import { actionCriteria, distanceCriteria, generateActionCandidates, DEFAULT_DISTANCE_CANDIDATES } from './candidates/index.js';
+import { summarizeFeatureCollection } from './state/index.js';
+import { executeWorkbenchCall } from './workbench/index.js';
 
 const roads: FeatureCollection = {
   type: 'FeatureCollection',
@@ -71,9 +74,56 @@ map.on('load', () => {
   map.addLayer({ id: 'schools', type: 'circle', source: 'schools', paint: { 'circle-color': '#f16b5b', 'circle-radius': 7, 'circle-stroke-color': '#fff4df', 'circle-stroke-width': 2 } });
 });
 
-document.querySelector<HTMLButtonElement>('#run')?.addEventListener('click', () => {
+document.querySelector<HTMLButtonElement>('#run')?.addEventListener('click', async () => {
   const result = document.querySelector<HTMLDivElement>('#result');
   if (!result) return;
-  result.innerHTML = `<div class="decision"><div class="decision-head"><span class="check">✓</span><div><small>JEV SELECTED</small><strong>Nearest</strong></div><b>0.91</b></div><p>Schools within the candidate distance of major roads.</p><div class="call"><small>VALIDATED TOOL CALL</small><code>nearest(schools, major-roads)</code></div><div class="receipt">3 candidates · 2 matches · deterministic preview</div></div>`;
-  map.flyTo({ center: [-0.115, 51.515], zoom: 13.7, duration: 900 });
+  const button = document.querySelector<HTMLButtonElement>('#run');
+  if (button) button.disabled = true;
+  result.innerHTML = '<div class="result-empty">Asking Jev to choose from the live workbench registry…</div>';
+  try {
+    const layers = new Map([
+      ['roads', roads],
+      ['schools', schools],
+    ]);
+    const state = {
+      intent: (document.querySelector<HTMLTextAreaElement>('#goal')?.value ?? '').trim(),
+      viewport: { bbox: [-0.16, 51.49, -0.07, 51.54] as [number, number, number, number], zoom: map.getZoom() },
+      layers: [summarizeFeatureCollection('roads', 'Major roads', roads), summarizeFeatureCollection('schools', 'Schools', schools)],
+      selection: { featureIds: [] },
+      previousActions: [],
+    };
+    const candidates = generateActionCandidates(state).filter((candidate) => ['buffer', 'export'].includes(candidate.id));
+    const response = await fetch('/api/jev', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        state,
+        model: 'jev-latest',
+        questions: {
+          action: { type: 'choice', instructions: 'Choose the implemented spatial operation that best advances the stated goal. Prefer buffer for proximity questions.', criteria: actionCriteria(candidates) },
+          distance: { type: 'choice', instructions: 'Choose a reasonable legal distance for the stated proximity goal.', criteria: distanceCriteria(DEFAULT_DISTANCE_CANDIDATES) },
+        },
+      }),
+    });
+    const payload = await response.json() as { answers?: { action?: { choice?: string; confidence?: number }; distance?: { choice?: string } }; error?: string };
+    if (!response.ok || !payload.answers?.action?.choice) throw new Error(payload.error ?? `Jev request failed (${response.status})`);
+    const action = payload.answers.action.choice;
+    const confidence = payload.answers.action.confidence ?? 0;
+    const distanceId = payload.answers.distance?.choice ?? '250m';
+    const distance = DEFAULT_DISTANCE_CANDIDATES.find((candidate) => candidate.id === distanceId)?.meters ?? 250;
+    if (action !== 'buffer') throw new Error(`Jev selected ${action}, which is not yet executable in this demo.`);
+    const execution = await executeWorkbenchCall({ tool: 'buffer', args: { layerId: 'roads', distanceMeters: distance } }, { layers });
+    const source = map.getSource('result') as maplibregl.GeoJSONSource | undefined;
+    if (source) source.setData(execution.data as FeatureCollection);
+    else {
+      map.addSource('result', { type: 'geojson', data: execution.data });
+      map.addLayer({ id: 'result', type: 'fill', source: 'result', paint: { 'fill-color': '#d49b4a', 'fill-opacity': 0.18, 'fill-outline-color': '#d49b4a' } }, 'schools');
+    }
+    result.innerHTML = `<div class="decision"><div class="decision-head"><span class="check">✓</span><div><small>JEV SELECTED</small><strong>${action}</strong></div><b>${confidence.toFixed(2)}</b></div><p>Jev selected a legal ${distance}m candidate for the proximity goal.</p><div class="call"><small>VALIDATED + EXECUTED WORKBENCH CALL</small><code>buffer(major-roads, ${distance}m)</code></div><div class="receipt">TypeSafe Jev · ${execution.data.features.length} source features · Turf.js result</div></div>`;
+    map.flyTo({ center: [-0.115, 51.515], zoom: 13.7, duration: 900 });
+  } catch (error) {
+    result.innerHTML = `<div class="error"><strong>Jev could not run.</strong><br /><span>${error instanceof Error ? error.message : 'The server proxy is unavailable.'}</span></div>`;
+  } finally {
+    if (button) button.disabled = false;
+  }
 });
