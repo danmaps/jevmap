@@ -1,0 +1,24 @@
+{
+  "name": "jevmap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Typed AI decision logic for spatial applications using Jev, GeoJSON, and a deterministic spatial workbench.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@turf/turf": "^7.4.0",
+    "maplibre-gl": "^6.11.1"
+  },
+  "devDependencies": {
+    "@types/geojson": "^7946.0.16",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
+  }
+}
