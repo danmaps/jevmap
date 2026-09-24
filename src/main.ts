@@ -1,4 +1,4 @@
-import maplibregl from "maplibre-gl";
+import { Map, NavigationControl } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 import { MapLibreAdapter } from "./map/index.js";
@@ -36,14 +36,14 @@ app.innerHTML = `
   </main>
 `;
 
-const map = new maplibregl.Map({
+const map = new Map({
   container: "map",
   style: "https://demotiles.maplibre.org/style.json",
   center: [-117.18, 34.055],
   zoom: 10,
 });
 
-map.addControl(new maplibregl.NavigationControl(), "top-right");
+map.addControl(new NavigationControl(), "top-right");
 const adapter = new MapLibreAdapter(map);
 
 const inspectButton = document.querySelector<HTMLButtonElement>("#inspect");
