@@ -105,6 +105,10 @@ document.querySelector<HTMLButtonElement>('#run')?.addEventListener('click', asy
         },
       }),
     });
+    const contentType = response.headers.get('content-type') ?? '';
+    if (!contentType.includes('application/json')) {
+      throw new Error('The live Jev proxy is not connected yet. Add the /api/jev Caddy route and start jevmap.service.');
+    }
     const payload = await response.json() as { answers?: { action?: { choice?: string; confidence?: number }; distance?: { choice?: string } }; error?: string };
     if (!response.ok || !payload.answers?.action?.choice) throw new Error(payload.error ?? `Jev request failed (${response.status})`);
     const action = payload.answers.action.choice;
