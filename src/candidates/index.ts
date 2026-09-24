@@ -54,13 +54,28 @@ export function generateActionCandidates(state: JevMapState): CandidateAction[] 
   return candidates;
 }
 
+export function generateBufferCandidates(state: JevMapState): CandidateAction[] {
+  const eligibleLayerIds = state.layers
+    .filter(
+      (layer) =>
+        layer.featureCount > 0 &&
+        layer.summary.geometryTypes.some((geometryType) => geometryType !== "Null"),
+    )
+    .map((layer) => layer.id);
+
+  return eligibleLayerIds.length > 0 ? [candidate("buffer", eligibleLayerIds)] : [];
+}
+
 export function actionCriteria(candidates: readonly CandidateAction[]): Record<string, string> {
   return Object.fromEntries(candidates.map((item) => [item.id, item.description]));
 }
 
-export function layerCriteria(state: JevMapState): Record<string, string> {
+export function layerCriteria(
+  state: JevMapState,
+  eligibleLayerIds: readonly string[] = state.layers.map((layer) => layer.id),
+): Record<string, string> {
   return Object.fromEntries(
-    state.layers.map((layer) => [
+    state.layers.filter((layer) => eligibleLayerIds.includes(layer.id)).map((layer) => [
       layer.id,
       `${layer.name}: ${layer.featureCount} feature(s), geometry ${layer.geometryType}`,
     ]),

@@ -95,15 +95,16 @@ npm test
 npm run build
 ```
 
-To call TypeSafe from a local development environment, configure:
+To choose the model used by the server-side `/api/jev` proxy, configure:
 
 ```bash
-VITE_TYPESAFE_API_KEY=...
 VITE_TYPESAFE_MODEL=jev-latest
 ```
 
-The current scaffold does not make an API request on page load. The API client is isolated so secrets can later be moved behind a server-side boundary before any hosted deployment.
+The browser sends bounded `choice` questions to `/api/jev`. The server-side proxy owns the TypeSafe credential. If the route is missing, the app displays an actionable proxy error. Never put a TypeSafe API key in a Vite environment variable or browser build.
+
+The demo starts with sample road and school GeoJSON. Use **Add GeoJSON layers** to load additional FeatureCollections. The current vertical slice asks Jev to choose an operation, source layer, and legal buffer distance. High-confidence choices run automatically, medium-confidence choices wait for approval, and low-confidence choices produce a request for more context. Every decision and execution outcome is available in the receipt panel.
 
 ## Status
 
-Early scaffold. The immediate goal is to prove one end-to-end loop: load GeoJSON, serialize state, generate legal tool candidates, ask Jev for a typed choice, execute one deterministic operation, and emit a receipt.
+The first vertical slice is a bounded GeoJSON-to-buffer workflow. Intersect, Nearest, Filter, Select, and workflow continuation remain future steps.
