@@ -2,6 +2,7 @@
 // Standard, uncached, short-context requests; no batch or reasoning surcharge estimate.
 export const INFERENCE_RATES = [
   { name: "Jev", input: 0.042, output: 0, source: "https://typesafe.ai/blog/introducing-system-one-models-and-jev" },
+  { name: "Julia 1 · local CPU", input: 0, output: 0, source: "https://huggingface.co/SupersonicLabs/Julia-1" },
   { name: "GPT-6 Luna", input: 0.10, output: 0.50, source: "https://developers.openai.com/api/docs/models/gpt-6-luna" },
   { name: "Claude Sonnet 5", input: 2, output: 10, source: "https://platform.claude.com/docs/en/about-claude/pricing" },
 ] as const;

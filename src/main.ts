@@ -402,26 +402,32 @@ function renderInferenceMetrics(plan?: SpatialDecisionPlan): void {
   const metrics = requiredElement<HTMLElement>("#inference-metrics");
   const wasOpen = metrics.querySelector("details")?.open ?? false;
   const inputTokens = plan ? plan.inference.inputTokens : 2000;
-  const isJev = !plan || /^jev(?:-|$)/i.test(plan.model);
-  const cost = inputTokens === undefined || !isJev ? undefined : estimateInferenceCost(inputTokens, 0, INFERENCE_RATES[0]);
+  const isJev = plan ? /^jev(?:-|$)/i.test(plan.model) : false;
+  const providerName = isJev ? "Jev" : "Julia 1 · local CPU";
+  const selectedRate = INFERENCE_RATES.find((rate) => rate.name === providerName)!;
+  const cost = isJev && inputTokens !== undefined ? estimateInferenceCost(inputTokens, 0, selectedRate) : estimateInferenceCost(0, 0, selectedRate);
   const latency = plan ? `${(plan.inference.durationMs / 1000).toFixed(2)} s` : "Run to measure";
   const tokenBudget = inputTokens ?? 2000;
   metrics.innerHTML = `
     <div class="panel-kicker">INFERENCE / COST & SPEED</div>
     <div class="metric-cards">
-      <div><small>${plan ? "Decision request time" : "Jev request time"}</small><strong>${latency}</strong></div>
-      <div><small>${plan ? "Estimated API cost" : "Example API cost"}</small><strong>${formatCost(cost)}</strong></div>
+      <div><small>${plan ? `${providerName} request time` : `${providerName} request time`}</small><strong>${latency}</strong></div>
+      <div><small>${isJev && plan ? "Estimated API cost" : "Estimated inference cost"}</small><strong>${formatCost(cost)}</strong></div>
     </div>
-    <p class="metric-note">${plan ? "Measured round trip, including network and proxy. GIS execution is timed separately." : "Example: 2,000 input tokens. TypeSafe reports 70–500 ms for Jev; your network and request size affect timing."}</p>
+    <p class="metric-note">${plan ? "Measured round trip, including service/network and proxy. GIS execution is timed separately." : "Julia 1 runs locally with no API charge. Select Jev to measure hosted inference and token-based cost."}</p>
     <details class="cost-comparison" ${wasOpen ? "open" : ""}>
-      <summary>Compare with Luna & Sonnet</summary>
+      <summary>Compare provider costs</summary>
       <table><caption>Illustrative cost per decision request</caption><thead><tr><th scope="col">Model</th><th scope="col">USD / call</th><th scope="col">Time</th></tr></thead><tbody>
-        ${INFERENCE_RATES.map((rate, index) => `<tr><th scope="row"><a href="${rate.source}" target="_blank" rel="noopener noreferrer">${rate.name}</a></th><td>${index === 0 ? formatCost(cost) : formatCost(estimateInferenceCost(tokenBudget, 300, rate))}</td><td>${index === 0 ? latency : "Not measured"}</td></tr>`).join("")}
+        ${INFERENCE_RATES.map((rate) => {
+          const selected = rate.name === providerName;
+          const rowCost = selected ? cost : estimateInferenceCost(tokenBudget, 300, rate);
+          return `<tr><th scope="row"><a href="${rate.source}" target="_blank" rel="noopener noreferrer">${rate.name}</a>${selected ? " · selected" : ""}</th><td>${formatCost(rowCost)}</td><td>${selected ? latency : "Not measured"}</td></tr>`;
+        }).join("")}
       </tbody></table>
-      <p class="metric-note">${inputTokens === undefined ? "Jev did not report token usage; its cost is unavailable. LLM examples use 2,000 input tokens." : `${tokenBudget.toLocaleString()} input tokens${plan ? " reported by Jev" : " assumed"}.`} Luna and Sonnet estimates reuse that input count plus an assumed 300 output tokens for the decisions and probabilities. Different tokenizers, prompts, and reasoning can change the bill. Standard uncached rates; no tools or reasoning tokens included. Jev output is free.</p>
+      <p class="metric-note">${isJev && inputTokens === undefined ? "Jev did not report token usage; its cost is unavailable." : isJev ? `${tokenBudget.toLocaleString()} input tokens${plan ? " reported by Jev" : " assumed"}.` : "Julia 1 cost is $0 for API inference; local CPU, memory, and electricity costs are not measured."} Hosted model examples use the same input count plus an assumed 300 output tokens. Different tokenizers and prompts can change estimates.</p>
       <p class="metric-note">No Luna or Sonnet request was run here; their latency and decision quality on this map task are unbenchmarked.</p>
       <p class="metric-note"><a href="https://evals.typesafe.ai/" target="_blank" rel="noopener noreferrer">Published workflow context ↗</a>: TypeSafe reports mean times of 0.4 s for Jev, 12.9 s for “Luna,” and 78.1 s for Sonnet 5 across four larger workflows at default reasoning. These are vendor results, not predictions for this call; the overview does not specify Luna’s version.</p>
-      <p class="metric-note">Pricing checked September 24, 2026. Model links above cite provider rates. <a href="https://typesafe.ai/blog/introducing-system-one-models-and-jev" target="_blank" rel="noopener noreferrer">Jev pricing and speed source ↗</a></p>
+      <p class="metric-note">Jev pricing checked September 24, 2026. Julia 1 is local and has no API charge; model links above cite the relevant provider/runtime source.</p>
     </details>`;
 }
 
