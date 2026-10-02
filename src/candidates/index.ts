@@ -40,18 +40,22 @@ const DESCRIPTIONS: Record<SpatialToolId, string> = {
 
 export function generateActionCandidates(state: JevMapState): CandidateAction[] {
   const layerIds = state.layers.map((layer) => layer.id);
+  if (layerIds.length === 0) return [];
+  const spatial = state.layers.filter((layer) => layer.featureCount > 0 && layer.summary.geometryTypes.length > 0 && layer.summary.geometryTypes.every((type) => !["Null", "Unknown", "GeometryCollection"].includes(type))).map((layer) => layer.id);
+  const points = state.layers.filter((layer) => layer.featureCount > 0 && layer.summary.geometryTypes.length === 1 && layer.summary.geometryTypes[0] === "Point").map((layer) => layer.id);
+  const polygons = state.layers.filter((layer) => layer.featureCount > 0 && layer.summary.geometryTypes.length > 0 && layer.summary.geometryTypes.every((type) => ["Polygon", "MultiPolygon"].includes(type))).map((layer) => layer.id);
   const candidates: CandidateAction[] = [
-    candidate("buffer", layerIds),
-    candidate("filter", layerIds),
+    candidate("buffer", spatial),
+    candidate("filter", state.layers.filter((layer) => layer.fields.length > 0).map((layer) => layer.id)),
     candidate("select", layerIds),
     candidate("export", layerIds),
   ];
 
   if (layerIds.length >= 2) {
-    candidates.splice(1, 0, candidate("intersect", layerIds), candidate("nearest", layerIds));
+    candidates.splice(1, 0, candidate("intersect", spatial.filter((id) => polygons.some((other) => other !== id))), candidate("nearest", points.length >= 2 ? points : []));
   }
 
-  return candidates;
+  return candidates.filter((item) => item.eligibleLayerIds.length > 0);
 }
 
 export function generateBufferCandidates(state: JevMapState): CandidateAction[] {

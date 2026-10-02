@@ -1,5 +1,7 @@
 # JevMap v0.1 Product and Technical Specification
 
+> This is the original v0.1 product specification. The implemented generic fields, semantic context, provider adapters, per-field policies, guarded fallback and live receipt UI are specified in [DECISIONS.md](DECISIONS.md) and [JULIA.md](JULIA.md). Those current contracts supersede the early global-threshold and sample-context examples below.
+
 ## Summary
 
 JevMap is a lightweight spatial decision engine that connects an interactive web map to TypeSafe AI's Jev model.
@@ -489,7 +491,7 @@ jevmap/
 
 ## Security boundary
 
-The browser scaffold may use `VITE_TYPESAFE_API_KEY` for local-only experimentation, but a hosted build must not expose a long-lived API key to the browser. Before deployment, Jev requests should move behind a small server/serverless endpoint that accepts normalized state and bounded questions, then forwards them to TypeSafe.
+The browser never receives a TypeSafe API key. Jev requests use a server-side proxy that accepts semantic state and bounded questions, then forwards them to TypeSafe. Local Julia and simulated demo modes require no hosted credentials.
 
 The server-side boundary should enforce:
 

@@ -1,17 +1,11 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles.css";
 import * as maplibregl from "maplibre-gl";
-import { distance, point } from "@turf/turf";
 import mapWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import {
-  createBufferDecisionPlan,
-  createPendingDecisionReceipt,
-  executeBufferDecision,
-  hashDecisionInputs,
-  type BufferDecisionPlan,
-  type SpatialData,
-} from "./analysis/index.js";
-import { JevProxyClient } from "./jev/proxy-client.js";
+import { createSpatialDecisionPlan, prepareSpatialDecision, spatialDecisionReceipt, executeSpatialDecision, type SpatialDecisionPlan } from "./analysis/workflow.js";
+import type { SpatialData } from "./analysis/index.js";
+import { createDecisionClient, DECISION_PROVIDERS, type DecisionProvider } from "./jev/providers.js";
+import { renderDecisionInterpretation, renderInterpretationError } from "./interpretation/index.js";
 import { estimateInferenceCost, formatCost, INFERENCE_RATES } from "./inference-cost.js";
 import { MapLibreAdapter } from "./map/index.js";
 import { toReceiptSummary, type ActionReceipt } from "./receipts/index.js";
@@ -33,21 +27,22 @@ const laLandmarks: SpatialData = { type: "FeatureCollection", features: [
 const categorizedPoints: SpatialData = { type: "FeatureCollection", features: demoPoints.features.map((feature, index) => ({ ...feature, properties: { ...(feature.properties ?? {}), category: index % 2 === 0 ? "civic" : "residential" } })) };
 
 const EXAMPLES: readonly ExampleDefinition[] = [
-  { id: "intersect", label: "Intersect", description: "points × study area", prompt: "Intersect the Los Angeles demo points with the downtown study area.", note: "Preview: two layers are loaded for a future intersection operation.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }, { id: "la-core-area", name: "Downtown study area", data: laCoreArea }] },
-  { id: "nearest", label: "Nearest", description: "points → landmarks", prompt: "Find the nearest landmark for each Los Angeles demo point.", note: "Preview: point and landmark layers are loaded for nearest-feature analysis.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }, { id: "la-landmarks", name: "Synthetic landmarks", data: laLandmarks }] },
-  { id: "filter", label: "Filter", description: "category = civic", prompt: "Filter the Los Angeles demo points to civic features.", note: "Preview: every point has a category field for deterministic filtering.", layers: [{ id: "la-demo-points", name: "Categorized demo points", data: categorizedPoints }] },
-  { id: "select", label: "Select", description: "choose features", prompt: "Select the Hollywood and Downtown demo points.", note: "Preview: the point layer is loaded for a map selection workflow.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }] },
-  { id: "export", label: "Export", description: "write GeoJSON", prompt: "Export the Los Angeles demo points as GeoJSON.", note: "Preview: the current layer is ready for the implemented export tool.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }] },
+  { id: "intersect", label: "Intersect", description: "points × study area", prompt: "Intersect the Los Angeles demo points with the downtown study area.", note: "Example: two layers are loaded for a future intersection operation.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }, { id: "la-core-area", name: "Downtown study area", data: laCoreArea }] },
+  { id: "nearest", label: "Nearest", description: "points → landmarks", prompt: "Find the nearest landmark for each Los Angeles demo point.", note: "Example: point and landmark layers are loaded for nearest-feature analysis.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }, { id: "la-landmarks", name: "Synthetic landmarks", data: laLandmarks }] },
+  { id: "filter", label: "Filter", description: "category = civic", prompt: "Filter the Los Angeles demo points to civic features.", note: "Example: every point has a category field for deterministic filtering.", layers: [{ id: "la-demo-points", name: "Categorized demo points", data: categorizedPoints }] },
+  { id: "select", label: "Select", description: "choose features", prompt: "Select the Hollywood and Downtown demo points.", note: "Example: the point layer is loaded for a map selection workflow.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }] },
+  { id: "export", label: "Export", description: "write GeoJSON", prompt: "Export the Los Angeles demo points as GeoJSON.", note: "Example: the current layer is ready for the implemented export tool.", layers: [{ id: "la-demo-points", name: "Los Angeles demo points", data: demoPoints }] },
 ];
 
 const COLORS = ["#e1a84b", "#f16b5b", "#82a9a1", "#b695ce", "#8fbf6e"];
 const layerData = new Map<string, SpatialData>();
 const layerStates = new Map<string, LayerState>();
 const receiptHistory: ActionReceipt[] = [];
-let activePlan: BufferDecisionPlan | undefined;
+let activePlan: SpatialDecisionPlan | undefined;
+let currentDecisionValues: Record<string, unknown> = {};
+let currentSelection: JevMapState["selection"] = { featureIds: [] };
 let pendingReceipt: ActionReceipt | undefined;
 let isBusy = false;
-let activeExample: ExampleId | undefined;
 
 const app = document.querySelector<HTMLDivElement>("#app");
 if (!app) throw new Error("App root not found.");
@@ -74,14 +69,17 @@ app.innerHTML = `
         <section class="examples" aria-labelledby="examples-heading">
           <div class="examples-heading"><span id="examples-heading" class="panel-kicker">TRY A TOOL</span><small>load an example</small></div>
           <div class="example-grid">${EXAMPLES.map((example) => `<button class="example-button" type="button" data-example="${example.id}"><b>${example.label}</b><span>${example.description}</span></button>`).join("")}</div>
-          <div id="example-status" class="example-status" aria-live="polite">Jev chooses from six bounded tools; deterministic previews run locally.</div>
+          <div id="example-status" class="example-status" aria-live="polite">Six bounded operations run through validated local tools.</div>
         </section>
         <label class="sr-only" for="goal">Spatial goal</label>
         <textarea id="goal">Create a 1 kilometer buffer around the Los Angeles demo points.</textarea>
         <label class="upload" for="geojson-files">Add GeoJSON layers<input id="geojson-files" type="file" accept=".json,.geojson,application/json,application/geo+json" multiple /></label>
         <div id="file-status" class="file-status" aria-live="polite">8 synthetic Los Angeles demo points are ready.</div>
         <a class="demo-download" href="${import.meta.env.BASE_URL}demo/los-angeles-points.geojson" download>Download demo GeoJSON ↗</a>
-        <button id="run" type="button">Ask Jev <span>↗</span></button>
+        <label class="provider-label" for="decision-provider">Decision provider</label>
+        <select id="decision-provider">${DECISION_PROVIDERS.map((provider) => `<option value="${provider.id}">${provider.label}</option>`).join("")}</select>
+        <p id="provider-note" class="metric-note">Jev uses the server-side proxy. Credentials stay on the server.</p>
+        <button id="run" type="button">Interpret task <span>↗</span></button>
         <div id="result" class="result" aria-live="polite" aria-busy="false">
           <div class="result-empty">Choose a spatial goal and ask for a buffer.<br /><span>Every operation is validated before it runs.</span></div>
         </div>
@@ -163,7 +161,14 @@ const mapReady = new Promise<void>((resolve) => {
   });
 });
 
-const jevClient = new JevProxyClient({ model: import.meta.env.VITE_TYPESAFE_MODEL || "jev-latest" });
+const providerSelect = requiredElement<HTMLSelectElement>("#decision-provider");
+providerSelect.addEventListener("change", () => {
+  finishPendingDecision("The decision provider changed. Request a fresh interpretation.");
+  activePlan = undefined;
+  requiredElement<HTMLElement>("#provider-note").textContent = providerSelect.value === "julia"
+    ? "Julia 1 uses the optional local Python service. Start it before requesting a decision."
+    : providerSelect.value === "demo" ? "Offline simulation uses fixed demo rules; it does not run a decision model." : "Jev uses the server-side proxy. Credentials stay on the server.";
+});
 renderInferenceMetrics();
 
 runButton.addEventListener("click", () => void runAnalysis());
@@ -183,7 +188,8 @@ async function loadExample(id: ExampleId): Promise<void> {
   receiptHistory.length = 0;
   activePlan = undefined;
   pendingReceipt = undefined;
-  activeExample = id;
+  currentDecisionValues = {};
+  currentSelection = { featureIds: [] };
   for (const layer of example.layers) registerLayer(layer.id, layer.name, layer.data);
   const firstExtent = [...layerStates.values()].find((layer) => layer.extent)?.extent;
   if (firstExtent) mapAdapter.fitBounds(firstExtent);
@@ -194,160 +200,100 @@ async function loadExample(id: ExampleId): Promise<void> {
   renderReceipts();
 }
 
-async function executeExample(id: ExampleId): Promise<void> {
-  const example = EXAMPLES.find((item) => item.id === id);
-  if (!example) return;
-  const primary = example.layers[0]?.data;
-  if (!primary) return;
-  const started = performance.now();
-  const primaryFeatures = primary.features.filter((feature) => feature.geometry?.type === "Point");
-  let output: SpatialData | undefined;
-  let operation = example.label;
-
-  if (id === "filter") {
-    output = { ...primary, features: primary.features.filter((feature) => feature.properties?.category === "civic") };
-  } else if (id === "select") {
-    output = { ...primary, features: primary.features.filter((feature) => feature.id === "la-01" || feature.id === "la-04") };
-  } else if (id === "intersect") {
-    const bounds = { west: -118.32, east: -118.20, south: 34.02, north: 34.10 };
-    output = { ...primary, features: primaryFeatures.filter((feature) => {
-      if (feature.geometry?.type !== "Point") return false;
-      const [lng, lat] = feature.geometry.coordinates;
-      return lng >= bounds.west && lng <= bounds.east && lat >= bounds.south && lat <= bounds.north;
-    }) };
-  } else if (id === "nearest") {
-    const landmarks = example.layers[1]?.data.features.filter((feature) => feature.geometry?.type === "Point") ?? [];
-    output = { type: "FeatureCollection", features: primaryFeatures.map((feature) => {
-      const from = feature.geometry?.type === "Point" ? feature.geometry.coordinates : [0, 0];
-      const nearest = landmarks.reduce<{ feature: typeof landmarks[number] | undefined; distance: number }>((best, candidate) => {
-        if (candidate.geometry?.type !== "Point") return best;
-        const nextDistance = distance(point(from), point(candidate.geometry.coordinates));
-        return nextDistance < best.distance ? { feature: candidate, distance: nextDistance } : best;
-      }, { feature: undefined, distance: Number.POSITIVE_INFINITY }).feature;
-      if (!nearest || nearest.geometry?.type !== "Point") return feature;
-      return { type: "Feature", properties: { from: feature.properties?.name ?? "Demo point", nearest: nearest.properties?.name ?? "Landmark" }, geometry: { type: "LineString", coordinates: [from, nearest.geometry.coordinates] } };
-    }) };
-  } else if (id === "export") {
-    const blob = new Blob([JSON.stringify(primary, null, 2)], { type: "application/geo+json" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "jevmap-los-angeles-demo.geojson";
-    link.click();
-    URL.revokeObjectURL(link.href);
-    output = primary;
-    operation = "Export";
-  }
-
-  if (!output) return;
-  const resultId = `example-${id}-result`;
-  if (layerStates.has(resultId)) mapAdapter.removeGeoJSONLayer(resultId);
-  layerData.delete(resultId);
-  layerStates.delete(resultId);
-  registerLayer(resultId, `${operation} result`, output, true);
-  const duration = Math.round(performance.now() - started);
-  resultElement.innerHTML = `<div class="decision"><div class="decision-head"><span class="check">✓</span><div><small>VALIDATED WORKBENCH PREVIEW</small><strong>${operation}</strong></div><b>DONE</b></div><p>${output.features.length} feature${output.features.length === 1 ? "" : "s"} produced from the example layers.</p><div class="call"><small>DETERMINISTIC TOOL CALL</small><code>${id}(${example.layers.map((layer) => layer.id).join(", ")})</code></div><div class="decision-status">Completed locally in ${duration} ms. Jev remains available for the buffer decision path.</div></div>`;
-  exampleStatus.textContent = `${operation} ran successfully on the loaded example layers.`;
-  renderInferenceMetrics();
-}
-
 async function runAnalysis(): Promise<void> {
   const intent = goalInput.value.trim();
-  if (!intent) {
-    showMessage("Enter a spatial goal first.", "error");
-    return;
-  }
-
+  if (!intent) { showMessage("Enter a spatial goal first.", "error"); return; }
   finishPendingDecision("A newer decision replaced this review.");
   activePlan = undefined;
   setBusy(true);
-  showMessage("Preparing map state and bounded choices…");
-
+  showMessage("Preparing semantic map context and bounded choices…");
   try {
     await mapReady;
     const state = buildState(intent);
-    const plan = await createBufferDecisionPlan(state, jevClient);
+    const client = createDecisionClient(providerSelect.value as DecisionProvider, {
+      jevModel: import.meta.env.VITE_TYPESAFE_MODEL || "jev-latest",
+      juliaEndpoint: import.meta.env.VITE_JULIA_ENDPOINT,
+    });
+    const proposal = await createSpatialDecisionPlan(state, client, { layers: layerData }, currentDecisionValues);
+    const plan = await prepareSpatialDecision(proposal, buildState(goalInput.value.trim()), { layers: layerData });
     activePlan = plan;
-
-    if (plan.action.choice !== "buffer") {
-      showPlan(plan, `Jev selected ${plan.action.choice}. Running the deterministic Workbench preview; review confidence is ${Math.round(plan.confidence * 100)}%.`);
-      activeExample = plan.action.choice as ExampleId;
-      await executeExample(activeExample);
-      return;
-    }
-
-    if (plan.policy === "execute") {
-      showPlan(plan, "High confidence. Executing the validated buffer call.");
-      const outcome = await executeBufferDecision(plan, layerData);
-      receiptHistory.unshift(outcome.receipt);
-      if (outcome.result) addResultLayer(plan, outcome.result.data);
-      renderReceipts();
-      showPlan(
-        plan,
-        outcome.receipt.execution.success
-          ? `Buffer completed in ${outcome.receipt.execution.durationMs} ms.`
-          : `Execution failed: ${outcome.receipt.execution.error ?? "Unknown error."}`,
-      );
-      return;
-    }
-
-    const receipt = createPendingDecisionReceipt(plan);
+    let receipt = spatialDecisionReceipt(plan);
     receiptHistory.unshift(receipt);
-    renderReceipts();
-    if (plan.policy === "review") {
-      pendingReceipt = receipt;
-      showPlan(plan, "Review the decision, then approve the deterministic operation.", true);
-    } else {
-      showPlan(plan, "Jev needs more context. No spatial operation was run.");
+    if (plan.policy === "execute") {
+      const outcome = await executeSpatialDecision(plan, buildState(goalInput.value.trim(), receipt.id), { layers: layerData }, { receipt });
+      receipt = outcome.receipt;
+      activePlan = outcome.plan;
+      receiptHistory[0] = receipt;
+      if (outcome.result) applyResult(outcome.plan, outcome.result, receipt);
     }
+    pendingReceipt = receipt.execution.status === "pending" ? receipt : undefined;
+    renderReceipts();
+    showReceipt(receipt, !!pendingReceipt);
+    renderInferenceMetrics(activePlan);
   } catch (error) {
-    showMessage(error instanceof Error ? error.message : "JevMap could not complete this request.", "error");
-  } finally {
-    setBusy(false);
-  }
+    showWorkflowError(error instanceof Error ? error.message : "JevMap could not complete this request.");
+  } finally { setBusy(false); }
 }
 
 async function approvePendingPlan(): Promise<void> {
   const plan = activePlan;
   const receipt = pendingReceipt;
   if (!plan || !receipt || isBusy) return;
-
   setBusy(true);
-  showPlan(plan, "Checking that the map state has not changed…");
   try {
-    await mapReady;
-    const currentState = buildState(goalInput.value.trim(), receipt.id);
-    if ((await hashDecisionInputs(currentState)) !== plan.executionStateHash) {
-      const index = receiptHistory.findIndex((item) => item.id === receipt.id);
-      if (index >= 0) {
-        receiptHistory[index] = {
-          ...receipt,
-          validation: { valid: false, warnings: ["The map state changed after this decision."] },
-          execution: { success: false, durationMs: 0, status: "not-run", error: "Ask Jev again before execution." },
-        };
-      }
-      pendingReceipt = undefined;
-      renderReceipts();
-      showPlan(plan, "Map state changed. Ask again to get a fresh decision.");
-      return;
-    }
-
-    const outcome = await executeBufferDecision(plan, layerData, receipt);
+    const outcome = await executeSpatialDecision(plan, buildState(goalInput.value.trim(), receipt.id), { layers: layerData }, { approved: true, receipt });
     const index = receiptHistory.findIndex((item) => item.id === receipt.id);
     if (index >= 0) receiptHistory[index] = outcome.receipt;
-    pendingReceipt = undefined;
-    if (outcome.result) addResultLayer(plan, outcome.result.data);
+    pendingReceipt = outcome.receipt.execution.status === "pending" ? outcome.receipt : undefined;
+    activePlan = outcome.plan;
+    if (outcome.result) applyResult(outcome.plan, outcome.result, outcome.receipt);
     renderReceipts();
-    showPlan(
-      plan,
-      outcome.receipt.execution.success
-        ? `Approved buffer completed in ${outcome.receipt.execution.durationMs} ms.`
-        : `Execution failed: ${outcome.receipt.execution.error ?? "Unknown error."}`,
-    );
+    showReceipt(outcome.receipt, !!pendingReceipt);
   } catch (error) {
-    showMessage(error instanceof Error ? error.message : "The approval could not be completed.", "error");
-  } finally {
-    setBusy(false);
+    showWorkflowError(error instanceof Error ? error.message : "The approval could not be completed.");
+  } finally { setBusy(false); }
+}
+
+function applyResult(plan: SpatialDecisionPlan, result: import("./workbench/index.js").WorkbenchResult, receipt: ActionReceipt): void {
+  for (const [id, field] of Object.entries(plan.decisions)) if (field.disposition !== "reject" && field.disposition !== "clarify") currentDecisionValues[id] = field.selectedValue;
+  currentDecisionValues.action = result.tool;
+  if (result.tool === "export") {
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(new Blob([JSON.stringify(result.data, null, 2)], { type: "application/geo+json" }));
+    link.href = url; link.download = "jevmap-result.geojson"; link.click(); URL.revokeObjectURL(url);
+  } else {
+    const resultId = `${result.layerId}-${receipt.id.slice(0, 8)}`;
+    registerLayer(resultId, `${result.tool} result`, result.data, true);
+    const layer = layerStates.get(resultId)!;
+    layer.provenance = { tool: result.tool, sourceLayerIds: plan.call ? [plan.call.args.layerId, ...("overlayLayerId" in plan.call.args ? [plan.call.args.overlayLayerId] : "targetLayerId" in plan.call.args ? [plan.call.args.targetLayerId] : [])] : [], receiptId: receipt.id };
+    if (result.tool === "select" && plan.call?.tool === "select") currentSelection = { layerId: plan.call.args.layerId, featureIds: [...plan.call.args.featureIds] };
   }
+}
+
+function showReceipt(receipt: ActionReceipt, allowApproval = false): void {
+  resultElement.innerHTML = renderDecisionInterpretation(receipt);
+  resultElement.scrollIntoView({ block: "start" });
+  if (allowApproval && receipt.execution.status === "pending") {
+    const approve = document.createElement("button");
+    approve.type = "button"; approve.className = "approve-button"; approve.textContent = "Approve & run proposed call";
+    approve.addEventListener("click", () => void approvePendingPlan()); resultElement.append(approve);
+  }
+  resultElement.querySelector<HTMLAnchorElement>('a[href^="#receipt-"]')?.addEventListener("click", () => {
+    const details = document.getElementById(`receipt-${receipt.id}`) as HTMLDetailsElement | null;
+    if (details) details.open = true;
+  });
+}
+
+function showWorkflowError(message: string): void {
+  const latest = receiptHistory[0];
+  if (activePlan && latest) {
+    showReceipt(latest, latest.execution.status === "pending");
+    const error = document.createElement("p");
+    error.className = "interpretation-error";
+    error.setAttribute("role", "alert");
+    error.textContent = message;
+    resultElement.append(error);
+  } else resultElement.innerHTML = renderInterpretationError(message);
 }
 
 async function loadFiles(): Promise<void> {
@@ -392,6 +338,7 @@ function finishPendingDecision(reason: string): void {
       execution: { success: false, durationMs: 0, status: "not-run", error: reason },
     };
     renderReceipts();
+    showReceipt(receiptHistory[index]!);
   }
   pendingReceipt = undefined;
 }
@@ -405,19 +352,12 @@ function registerLayer(id: string, name: string, data: SpatialData, fit = false)
   if (fit && layer.extent) mapAdapter.fitBounds(layer.extent);
 }
 
-function addResultLayer(plan: BufferDecisionPlan, data: SpatialData): void {
-  const source = layerStates.get(plan.layer.choice);
-  const name = `${source?.name ?? plan.layer.choice} buffer · ${plan.distanceCandidate.label}`;
-  const resultId = `${plan.call.args.layerId}__buffer_${plan.distanceCandidate.id}`;
-  registerLayer(resultId, name, data, true);
-}
-
 function buildState(intent: string, excludeReceiptId?: string): JevMapState {
   return {
     intent,
     viewport: mapAdapter.getViewport(),
     layers: [...layerStates.values()],
-    selection: { featureIds: [] },
+    selection: { ...currentSelection, featureIds: [...currentSelection.featureIds] },
     previousActions: receiptHistory
       .filter((receipt) => receipt.id !== excludeReceiptId)
       .map(toReceiptSummary),
@@ -447,6 +387,7 @@ function renderReceipts(): void {
   for (const receipt of receiptHistory) {
     const details = document.createElement("details");
     details.className = "receipt-card";
+    details.id = `receipt-${receipt.id}`;
     const summary = document.createElement("summary");
     const state = receipt.execution.status ?? (receipt.execution.success ? "succeeded" : "not-run");
     summary.textContent = `${receipt.selectedAction} · ${state} · ${Math.round(receipt.confidence * 100)}%`;
@@ -457,69 +398,7 @@ function renderReceipts(): void {
   }
 }
 
-function showPlan(plan: BufferDecisionPlan, message: string, allowApproval = false): void {
-  renderInferenceMetrics(plan);
-  resultElement.replaceChildren();
-  const decision = document.createElement("div");
-  decision.className = "decision";
-
-  const header = document.createElement("div");
-  header.className = "decision-head";
-  const mark = document.createElement("span");
-  mark.className = `check ${plan.policy === "clarify" ? "check-muted" : ""}`;
-  mark.textContent = plan.policy === "clarify" ? "?" : "✓";
-  const heading = document.createElement("div");
-  const source = document.createElement("small");
-  source.textContent = plan.model === "local-demo" ? "LOCAL SIMULATION" : "JEV DECISION";
-  const action = document.createElement("strong");
-  action.textContent = plan.action.choice[0]?.toUpperCase() + plan.action.choice.slice(1);
-  heading.append(source, action);
-  const confidence = document.createElement("b");
-  confidence.textContent = `${Math.round(plan.confidence * 100)}%`;
-  header.append(mark, heading, confidence);
-
-  const description = document.createElement("p");
-  const sourceLayer = layerStates.get(plan.layer.choice);
-  description.textContent = plan.action.choice === "buffer" ? `${plan.distanceCandidate.label} around ${sourceLayer?.name ?? plan.layer.choice}.` : `Jev selected ${plan.action.choice} for ${sourceLayer?.name ?? plan.layer.choice}.` ;
-
-  const call = document.createElement("div");
-  call.className = "call";
-  const callLabel = document.createElement("small");
-  callLabel.textContent = "VALIDATED TOOL CALL";
-  const callCode = document.createElement("code");
-  callCode.textContent = plan.action.choice === "buffer" ? `buffer(${plan.call.args.layerId}, ${plan.call.args.distanceMeters}m)` : `${plan.action.choice}(${plan.call.args.layerId})`;
-  call.append(callLabel, callCode);
-
-  const probabilities = document.createElement("div");
-  probabilities.className = "probability-groups";
-  appendProbabilityGroup(probabilities, "Operation", plan.action.probabilities, (key) => key);
-  appendProbabilityGroup(probabilities, "Input layer", plan.layer.probabilities, (key) => layerStates.get(key)?.name ?? key);
-  appendProbabilityGroup(probabilities, "Buffer distance", plan.distance.probabilities, (key) => {
-    return key === plan.distance.choice
-      ? plan.distanceCandidate.label
-      : key === "1km"
-        ? "1 kilometer"
-        : `${key.replace(/m$/, "")} meters`;
-  });
-
-  const status = document.createElement("div");
-  status.className = `decision-status ${plan.policy === "clarify" ? "error" : ""}`;
-  status.textContent = message;
-  decision.append(header, description, call, probabilities, status);
-
-  if (allowApproval) {
-    const approve = document.createElement("button");
-    approve.type = "button";
-    approve.className = "approve-button";
-    approve.textContent = "Approve & run operation";
-    approve.addEventListener("click", () => void approvePendingPlan());
-    decision.append(approve);
-  }
-
-  resultElement.append(decision);
-}
-
-function renderInferenceMetrics(plan?: BufferDecisionPlan): void {
+function renderInferenceMetrics(plan?: SpatialDecisionPlan): void {
   const metrics = requiredElement<HTMLElement>("#inference-metrics");
   const wasOpen = metrics.querySelector("details")?.open ?? false;
   const inputTokens = plan ? plan.inference.inputTokens : 2000;
@@ -530,7 +409,7 @@ function renderInferenceMetrics(plan?: BufferDecisionPlan): void {
   metrics.innerHTML = `
     <div class="panel-kicker">INFERENCE / COST & SPEED</div>
     <div class="metric-cards">
-      <div><small>${plan ? "This Jev request" : "Jev request time"}</small><strong>${latency}</strong></div>
+      <div><small>${plan ? "Decision request time" : "Jev request time"}</small><strong>${latency}</strong></div>
       <div><small>${plan ? "Estimated API cost" : "Example API cost"}</small><strong>${formatCost(cost)}</strong></div>
     </div>
     <p class="metric-note">${plan ? "Measured round trip, including network and proxy. GIS execution is timed separately." : "Example: 2,000 input tokens. TypeSafe reports 70–500 ms for Jev; your network and request size affect timing."}</p>
@@ -546,36 +425,6 @@ function renderInferenceMetrics(plan?: BufferDecisionPlan): void {
     </details>`;
 }
 
-function appendProbabilityGroup(
-  parent: HTMLElement,
-  title: string,
-  values: Record<string, number>,
-  labelFor: (key: string) => string,
-): void {
-  const group = document.createElement("div");
-  group.className = "probability-group";
-  const heading = document.createElement("h3");
-  heading.textContent = title;
-  group.append(heading);
-
-  const rows = Object.entries(values).sort((left, right) => right[1] - left[1]);
-  for (const [key, probability] of rows) {
-    const row = document.createElement("div");
-    row.className = "probability-row";
-    const label = document.createElement("span");
-    label.textContent = labelFor(key);
-    const meter = document.createElement("progress");
-    meter.max = 1;
-    meter.value = probability;
-    meter.setAttribute("aria-label", `${label.textContent}: ${Math.round(probability * 100)} percent`);
-    const value = document.createElement("b");
-    value.textContent = `${Math.round(probability * 100)}%`;
-    row.append(label, meter, value);
-    group.append(row);
-  }
-  parent.append(group);
-}
-
 function showMessage(message: string, style = ""): void {
   resultElement.replaceChildren();
   const content = document.createElement("div");
@@ -588,6 +437,8 @@ function setBusy(busy: boolean): void {
   isBusy = busy;
   runButton.disabled = busy;
   fileInput.disabled = busy;
+  providerSelect.disabled = busy;
+  document.querySelectorAll<HTMLButtonElement>("[data-example]").forEach((button) => { button.disabled = busy; });
   resultElement.setAttribute("aria-busy", String(busy));
   runButton.querySelector("span")?.replaceChildren(document.createTextNode(busy ? "…" : "↗"));
 }

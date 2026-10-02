@@ -163,6 +163,32 @@ describe("TypeSafe response validation", () => {
 });
 
 describe("first buffer workflow", () => {
+  it("cannot relax canonical field clarification with a legacy confidence policy", async () => {
+    const base = fakeClient(0.99);
+    const ambiguous: DecisionClient = {
+      async ask(state, questions) {
+        const response = await base.ask(state, questions);
+        response.answers.action = { type: "choice", choice: "buffer", confidence: 0.99, probabilities: { buffer: 0.5, filter: 0.5, select: 0, export: 0 } };
+        return response;
+      },
+    };
+    const plan = await createBufferDecisionPlan(makeState(), ambiguous, { executeAt: 0.8, reviewAt: 0.55 });
+    expect(plan.decisions.action.disposition).toBe("clarify");
+    expect(plan.policy).toBe("clarify");
+    const result = await executeBufferDecision(plan, new Map([["roads", roads]]), undefined, true);
+    expect(result.result).toBeUndefined();
+    expect(result.receipt.execution.success).toBe(false);
+  });
+
+  it("binds a legacy buffer call to the bounded distance that was chosen", async () => {
+    const plan = await createBufferDecisionPlan(makeState(), fakeClient());
+    plan.call.args.distanceMeters = 100_000;
+    const result = await executeBufferDecision(plan, new Map([["roads", roads]]));
+    expect(result.result).toBeUndefined();
+    expect(result.receipt.validation.valid).toBe(false);
+    expect(result.receipt.execution.error).toMatch(/decision or call changed/);
+  });
+
   it("records request time and usage independently of GIS execution", async () => {
     const clock = vi.spyOn(performance, "now").mockReturnValueOnce(100).mockReturnValueOnce(350);
     try {

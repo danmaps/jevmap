@@ -43,10 +43,16 @@ describe("applyDecisionPolicy", () => {
 });
 
 describe("generateActionCandidates", () => {
-  it("exposes pairwise spatial tools when two or more layers exist", () => {
+  it("exposes nearest for two point layers and intersect only with a polygon overlay", () => {
     const ids = generateActionCandidates(makeState(2)).map((candidate) => candidate.id);
-    expect(ids).toContain("intersect");
+    expect(ids).not.toContain("intersect");
     expect(ids).toContain("nearest");
+    const state = makeState(2);
+    state.layers[1]!.geometryType = "Polygon";
+    state.layers[1]!.summary.geometryTypes = ["Polygon"];
+    const mixedIds = generateActionCandidates(state).map((candidate) => candidate.id);
+    expect(mixedIds).toContain("intersect");
+    expect(mixedIds).not.toContain("nearest");
   });
 
   it("omits pairwise tools for a single layer", () => {

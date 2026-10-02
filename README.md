@@ -2,12 +2,12 @@
 
 Typed AI decision logic for spatial applications.
 
-JevMap connects an interactive GeoJSON-driven web map to [TypeSafe AI's Jev](https://typesafe.ai/) decision model. It serializes map state, generates bounded spatial action candidates, asks Jev to choose among those candidates, validates the result, and executes deterministic GIS operations through a Spatial Workbench-style tool layer.
+JevMap connects an interactive GeoJSON-driven web map to [TypeSafe AI's Jev](https://typesafe.ai/) decision model. It summarizes map state semantically, generates bounded decision fields, obtains a typed state diff, applies field-specific policy and runtime guards, and executes deterministic GIS operations through a Spatial Workbench-style tool layer. Jev remains the default; Julia 1 is an explicit optional local backend.
 
 The core loop is:
 
 ```text
-map state -> candidate actions -> Jev decisions -> validated tool call -> spatial execution -> new map state
+deterministic application -> bounded decision surface -> typed state diff -> deterministic execution
 ```
 
 The project is inspired by [`danmaps/webmap_ai`](https://github.com/danmaps/webmap_ai), especially its provider-neutral map adapter, typed tool registry, runtime validation, and inspectable execution model. JevMap narrows the AI role further: Jev supplies judgment at fuzzy decision points while ordinary code owns geometry, validation, thresholds, and execution.
@@ -16,7 +16,7 @@ The design follows the [Spatial Workbench](https://workbench.dannymcvey.com/) pa
 
 ## Goals
 
-- Treat GeoJSON map state as structured model context.
+- Send compact semantic map summaries to the decision model; keep geometry in the spatial engine.
 - Keep the model inside a bounded, typed decision surface.
 - Let Jev choose spatial tools, layers, and legal parameter candidates.
 - Execute spatial operations deterministically with Turf.js and typed workbench tools.
@@ -37,7 +37,7 @@ The first milestone targets:
 - bounded tool and parameter candidate generation
 - Buffer, Intersect, Nearest, Filter, Select, and Export operations
 - sequential multi-step execution
-- confidence thresholds and review policy
+- field-specific decision policies, review, and guarded ranked fallback
 - decision receipts and replayable workflows
 
 ## Architecture
@@ -80,7 +80,7 @@ src/
   receipts/     inspectable decision and execution receipts
 ```
 
-The full product and technical specification lives in [`docs/SPEC.md`](docs/SPEC.md).
+The original product specification lives in [`docs/SPEC.md`](docs/SPEC.md). The current decision architecture, policies, guards, and receipt contract are documented in [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 ## Development
 
@@ -105,7 +105,9 @@ VITE_TYPESAFE_MODEL=jev-latest
 
 The browser sends bounded `choice` questions to `/api/jev`. The server-side proxy owns the TypeSafe credential. If the route is missing, the app displays an actionable proxy error. Never put a TypeSafe API key in a Vite environment variable or browser build.
 
-The demo opens over Los Angeles with a muted dark OpenStreetMap basemap and eight synthetic sample points. The default task creates a 1-kilometer buffer around those points. The same preloaded dataset is available from **Download demo GeoJSON**, with its source in `public/demo/los-angeles-points.geojson`; these are illustrative points, not real facilities. Use **Add GeoJSON layers** to load additional FeatureCollections. Jev now receives the full bounded tool catalog (Buffer, Intersect, Nearest, Filter, Select, and Export) and chooses the operation before the validated local preview runs. Buffer keeps the confidence gate; deterministic previews for the other tools display the selected result while their confidence remains visible. Every decision and execution outcome is available in the receipt panel.
+The demo opens over Los Angeles with eight synthetic sample points. Use **Add GeoJSON layers** or a tool example to load FeatureCollections. **Interpret task** asks the selected provider for bounded operation/layer/parameter choices. All six tools pass application policy and deterministic guards before execution. Review decisions and permitted lower-ranked fallbacks display the exact proposed call and require approval. Stale map data blocks execution. The live panel shows each model choice, probability, policy disposition, and execution outcome, with full distributions and canonical receipts available on demand.
+
+Select **Demo · simulated** to exercise the complete local workflow offline. Select **Julia 1 · local CPU** after following [`docs/JULIA.md`](docs/JULIA.md). That backend uses the real released checkpoint through an optional loopback Python service and includes a reproducible fixture evaluation. Jev stays the default hosted path. Neither local mode requires a model API key in the browser.
 
 ## Inference cost and speed
 
@@ -115,4 +117,4 @@ The comparison uses GPT-6 Luna ($0.10/$0.50 input/output per million tokens) and
 
 ## Implementation status
 
-The demo executes the bounded GeoJSON workflow locally. Jev chooses among the six registered operations; Buffer is the production confidence-gated path, while the other operations currently run as deterministic local previews.
+Buffer, Intersect (feature selection against a polygon overlay), Nearest (Point-to-Point connections), scalar Filter, bounded Select, and GeoJSON Export execute through the local validated Workbench. The primary workflow uses generic decision surfaces, semantic context, per-field policies, full-data stale checks, and auditable fallback. Julia is optional and experimentally evaluated; the report records overconfident mistakes and unmeasured Jev comparisons without changing the default.
