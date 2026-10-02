@@ -6,7 +6,7 @@ JevMap separates fuzzy judgment from deterministic spatial execution.
 User intent + authoritative map data
   -> semantic map summary
   -> eligible bounded DecisionFields / DecisionSurface
-  -> selected provider (Jev default, optional Julia)
+  -> selected provider (Julia default, optional Jev)
   -> typed state diff and per-field policy dispositions
   -> deterministic guards and policy-controlled ranked fallback
   -> concrete approval when required

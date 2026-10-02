@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createBufferDecisionPlan, executeBufferDecision, createPendingDecisionReceipt } from "../src/analysis/index.js";
 import { applyDecisionPolicy, choiceQuestion } from "../src/jev/index.js";
 import { JuliaClient, JULIA_MODEL, JULIA_REVISION, parseJuliaChoiceAnswer } from "../src/jev/julia-client.js";
-import { createDecisionClient, DemoDecisionClient } from "../src/jev/providers.js";
+import { createDecisionClient } from "../src/jev/providers.js";
 import { summarizeFeatureCollection } from "../src/state/index.js";
 import { createSpatialDecisionPlan, prepareSpatialDecision, executeSpatialDecision, spatialDecisionReceipt } from "../src/analysis/workflow.js";
 
@@ -93,26 +93,12 @@ describe("Julia requests", () => {
 });
 
 describe("explicit provider selection", () => {
-  it("keeps Jev and jev-latest as the default", async () => {
-    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ model: "jev-latest", answers: {} }), { headers: { "content-type": "application/json" } }));
-    const result = await createDecisionClient(undefined, { fetchImpl }).ask({}, {});
-    expect(JSON.parse(String(fetchImpl.mock.calls[0]![1]?.body)).model).toBe("jev-latest");
-    expect(result.provenance?.backend).toBe("jev");
-    expect(result.provenance?.simulated).toBe(false);
+  it("uses Julia as the default while keeping Jev explicitly available", () => {
     expect(createDecisionClient("julia")).toBeInstanceOf(JuliaClient);
     expect(createDecisionClient("julia").model).toBe(JULIA_MODEL);
-    expect(createDecisionClient("demo").model).toBe("demo-rules-v1");
-    expect(createDecisionClient().model).toBe("jev-latest");
+    expect(createDecisionClient().model).toBe(JULIA_MODEL);
     expect(createDecisionClient("jev", { jevModel: "jev-pinned" }).model).toBe("jev-pinned");
     expect(() => createDecisionClient("invalid" as never)).toThrow("Unknown decision provider");
-  });
-
-  it("labels demo as simulated and abstains on an ambiguous intent", async () => {
-    const result = await new DemoDecisionClient().ask({ intent: "Do something" }, { action: choiceQuestion("Choose", { buffer: "Buffer features", export: "Export features" }) });
-    expect(result.provenance?.simulated).toBe(true);
-    expect(result.provenance?.backend).toBe("demo");
-    expect(result.model).toBe("demo-rules-v1");
-    expect(applyDecisionPolicy(result.answers.action!.confidence)).toBe("clarify");
   });
 
   it("uses Julia through the same plan, approval, validation and receipt path", async () => {

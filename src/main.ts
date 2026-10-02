@@ -78,7 +78,7 @@ app.innerHTML = `
         <a class="demo-download" href="${import.meta.env.BASE_URL}demo/los-angeles-points.geojson" download>Download demo GeoJSON ↗</a>
         <label class="provider-label" for="decision-provider">Decision provider</label>
         <select id="decision-provider">${DECISION_PROVIDERS.map((provider) => `<option value="${provider.id}">${provider.label}</option>`).join("")}</select>
-        <p id="provider-note" class="metric-note">Jev uses the server-side proxy. Credentials stay on the server.</p>
+        <p id="provider-note" class="metric-note">Julia 1 runs through the local CPU service.</p>
         <button id="run" type="button">Interpret task <span>↗</span></button>
         <div id="result" class="result" aria-live="polite" aria-busy="false">
           <div class="result-empty">Choose a spatial goal and ask for a buffer.<br /><span>Every operation is validated before it runs.</span></div>
@@ -89,8 +89,8 @@ app.innerHTML = `
         <details class="architecture-panel">
           <summary>How this map works <span>↗</span></summary>
           <div class="loop"><span>MAP STATE</span><b>→</b><span>JEV DECISION</span><b>→</b><span>SPATIAL TOOLS</span></div>
-          <p class="architecture-note">Designed around the <a href="https://workbench.dannymcvey.com/" target="_blank" rel="noopener noreferrer">Spatial Workbench</a> pattern: Jev chooses a bounded action, validated spatial tools compute the geometry, and the map displays the result. This demo implements that tool layer locally with Turf.js and renders it with MapLibre; the separate Spatial Workbench service is not connected.</p>
-          <p class="footnote">Jev runs through a server-side proxy. The API key stays out of your browser.</p>
+          <p class="architecture-note">Designed around the <a href="https://workbench.dannymcvey.com/" target="_blank" rel="noopener noreferrer">Spatial Workbench</a> pattern: Julia chooses a bounded action, validated spatial tools compute the geometry, and the map displays the result. This app implements that tool layer locally with Turf.js and renders it with MapLibre; the separate Spatial Workbench service is not connected.</p>
+          <p class="footnote">Julia runs through a local CPU service; hosted Jev remains available as an explicit alternative.</p>
         </details>
         </div>
       </aside>
@@ -166,8 +166,8 @@ providerSelect.addEventListener("change", () => {
   finishPendingDecision("The decision provider changed. Request a fresh interpretation.");
   activePlan = undefined;
   requiredElement<HTMLElement>("#provider-note").textContent = providerSelect.value === "julia"
-    ? "Julia 1 uses the optional local Python service. Start it before requesting a decision."
-    : providerSelect.value === "demo" ? "Offline simulation uses fixed demo rules; it does not run a decision model." : "Jev uses the server-side proxy. Credentials stay on the server.";
+    ? "Julia 1 runs through the local CPU service."
+    : "Jev uses the server-side proxy. Credentials stay on the server.";
 });
 renderInferenceMetrics();
 

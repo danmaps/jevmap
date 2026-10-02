@@ -491,7 +491,7 @@ jevmap/
 
 ## Security boundary
 
-The browser never receives a TypeSafe API key. Jev requests use a server-side proxy that accepts semantic state and bounded questions, then forwards them to TypeSafe. Local Julia and simulated demo modes require no hosted credentials.
+The browser never receives a TypeSafe API key. Jev requests use a server-side proxy that accepts semantic state and bounded questions, then forwards them to TypeSafe. Julia runs through the local CPU service and requires no hosted credentials.
 
 The server-side boundary should enforce:
 
