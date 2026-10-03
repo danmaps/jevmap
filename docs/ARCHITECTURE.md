@@ -2,63 +2,22 @@
 
 JevMap separates fuzzy judgment from deterministic spatial execution.
 
-## Data flow
-
 ```text
-User intent
-  -> MapAdapter
-  -> normalized JevMapState
-  -> candidate generators
-  -> TypeSafe / Jev decision
-  -> confidence policy
-  -> runtime workbench validation
-  -> deterministic spatial operation
-  -> result GeoJSON
-  -> ActionReceipt
-  -> updated map state
+User intent + authoritative map data
+  -> semantic map summary
+  -> eligible bounded DecisionFields / DecisionSurface
+  -> selected provider (Jev-latest default, optional Julia)
+  -> typed state diff and per-field policy dispositions
+  -> deterministic guards and policy-controlled ranked fallback
+  -> concrete approval when required
+  -> fresh guards + validated deterministic Workbench
+  -> result map state + canonical ActionReceipt
 ```
 
-## Boundaries
+Meaning goes to the decision model; geometry stays in the spatial engine.
 
-### Map runtime
+`src/map/` isolates MapLibre behind an adapter. `src/state/` summarizes runtime GeoJSON without sending samples or coordinates by default. `src/candidates/` derives legal options from authoritative application data and capabilities. `src/decisions/` builds bounded payloads and parses field changes with threshold, winner, ordered, and confirmation policies. `src/jev/` isolates provider contracts and response validation; Julia selection is explicit and requires review.
 
-`src/map/` hides MapLibre-specific APIs behind a small adapter. Other renderers should be able to expose the same state without changing decision or workbench code.
+`src/analysis/workflow.ts` orchestrates the primary workflow. It captures complete runtime data hashes, records all bounded decisions, validates the model-selected operation, considers only declared fallback candidates, and rechecks freshness/feasibility before execution. `src/workbench/` owns deterministic Turf operations and runtime argument/geometry/capacity validation. `src/receipts/` stores replayable context, model provenance, decisions, guards, the actual call and execution outcome. `src/interpretation/` renders those same receipt records without another audit format.
 
-### State
-
-`src/state/` produces compact model context from GeoJSON and map state. Large datasets should be summarized deterministically before model calls.
-
-### Jev
-
-`src/jev/` owns the TypeSafe API contract and application confidence policy. Jev answers bounded questions. It does not execute GIS operations.
-
-### Candidates
-
-`src/candidates/` turns current state and tool constraints into legal choices. This is where open-ended GIS parameter spaces become finite model decisions.
-
-### Workbench
-
-`src/workbench/` validates calls and performs deterministic spatial computation. A model response cannot bypass this layer.
-
-### Receipts
-
-`src/receipts/` records state identity, model output, selected action, validation, and execution results so workflows can be inspected and replayed.
-
-## First vertical slice
-
-The first implementation milestone is deliberately narrow:
-
-```text
-load GeoJSON
-  -> summarize layer
-  -> create buffer/layer/distance candidates
-  -> submit typed choice questions to Jev
-  -> apply confidence policy
-  -> validate BufferCall
-  -> execute Turf buffer
-  -> add result layer
-  -> write receipt
-  -> show probabilities + result on map
-```
-
-Once this loop is tested end to end, add `intersect`, `nearest`, filtering, selection, and workflow continuation one at a time.
+See [DECISIONS.md](DECISIONS.md) for the field/diff contract, policies, guard/fallback behavior, receipt semantics and tests. See [JULIA.md](JULIA.md) for optional runtime setup and evaluation.
