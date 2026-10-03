@@ -2,7 +2,7 @@
 
 Typed AI decision logic for spatial applications.
 
-JevMap connects an interactive GeoJSON-driven web map to the Julia 1 decision model and an optional [TypeSafe AI Jev](https://typesafe.ai/) hosted alternative. It summarizes map state semantically, generates bounded decision fields, obtains a typed state diff, applies field-specific policy and runtime guards, and executes deterministic GIS operations through a Spatial Workbench-style tool layer.
+JevMap connects an interactive GeoJSON-driven web map to [TypeSafe AI Jev](https://typesafe.ai/) and an optional Julia 1 CPU decision model. It summarizes map state semantically, generates bounded decision fields, obtains a typed state diff, applies field-specific policy and runtime guards, and executes deterministic GIS operations through a Spatial Workbench-style tool layer.
 
 The core loop is:
 
@@ -107,7 +107,7 @@ The browser sends bounded `choice` questions to `/api/jev`. The server-side prox
 
 The demo opens over Los Angeles with eight synthetic sample points. Use **Add GeoJSON layers** or a tool example to load FeatureCollections. **Interpret task** asks the selected provider for bounded operation/layer/parameter choices. All six tools pass application policy and deterministic guards before execution. Review decisions and permitted lower-ranked fallbacks display the exact proposed call and require approval. Stale map data blocks execution. The live panel shows each model choice, probability, policy disposition, and execution outcome, with full distributions and canonical receipts available on demand.
 
-Select **Julia 1 · local CPU** after following [`docs/JULIA.md`](docs/JULIA.md). Julia is the default and uses the real released checkpoint through the loopback Python service. Jev remains available as an explicit hosted alternative. The browser receives no model credentials.
+Jev-latest is the default. Select **Julia 1 · local CPU** after following [`docs/JULIA.md`](docs/JULIA.md). Julia uses the real checkpoint through a same-origin proxy to the loopback Python service and requires review of each concrete call. The browser receives no model credentials.
 
 ## Inference cost and speed
 

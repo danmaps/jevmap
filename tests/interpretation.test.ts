@@ -25,6 +25,20 @@ function receipt(patch: Record<string, unknown> = {}): ActionReceipt {
 }
 
 describe("live decision interpretation", () => {
+  it("distinguishes unused fallback parameters from applied choices", () => {
+    const html = renderDecisionInterpretation(receipt({
+      decisions: { action: field(), overlay: field({ id: "overlay", label: "Target layer" }) },
+      guard: { originalChoice: "intersect", finalChoice: "select", fallback: true, ranking: [], rejected: [] },
+      call: { tool: "select", args: { layerId: "schools", featureIds: ["school-1"] } },
+    }));
+    expect(html).toContain("Not used by fallback");
+    expect(html).toContain("Replaced by fallback");
+  });
+
+  it("makes singleton application choices distinguishable from model inference", () => {
+    expect(renderDecisionInterpretation(receipt({ decisions: { action: field({ provenance: { source: "deterministic" } }) } }))).toContain("no model inference");
+  });
+
   it("renders the canonical parser result without adapting it into another UI record", () => {
     const parsed = parseDecisionSurface({ state: { intent: "Export schools" }, fields: { action: {
       label: "Operation", question: "Which operation advances the goal?", currentValue: null,

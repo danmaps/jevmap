@@ -50,7 +50,7 @@ export interface CreateReceiptInput extends Omit<ActionReceipt, "id" | "timestam
 
 export function createReceipt(input: CreateReceiptInput): ActionReceipt {
   return {
-    ...input,
+    ...structuredClone(input),
     id: input.id ?? createReceiptId(),
     timestamp: input.timestamp ?? new Date().toISOString(),
   };

@@ -1,0 +1,761 @@
+{
+  "schemaVersion": 1,
+  "timestamp": "2026-10-03T00:57:17.366Z",
+  "fixtureVersion": 1,
+  "fixtureSha256": "d198eb70957bd72d39f4687974b009a21c0a19af67ae022efc943cd430e5a29c",
+  "fixturePath": "tests/fixtures/decision-evaluation.json",
+  "environment": {
+    "node": "v23.4.0",
+    "platform": "win32",
+    "architecture": "x64"
+  },
+  "protocol": "One adapter request per fixture in file order. Persistent service/model reused; earlier smoke calls may have warmed it. The production parseDecisionSurface applies OPERATION_POLICY to operations, LAYER_POLICY to layers/20-option boundary, and DISTANCE_POLICY to distances (including ambiguous distance). Accuracy measures the policy-selected legal candidate and counts invalid/clarify outcomes as incorrect on labeled cases; topChoiceAccuracy measures the raw model winner. Each case stores disposition, effective evidence, typed diff and policy definition. Ambiguous correctness requires clarify. No thresholds fitted to these fixtures. Small hand-labeled set is a smoke evaluation, not statistical qualification.",
+  "runtime": {
+    "julia": {
+      "modelBytes": 577189056,
+      "upstreamFp32MiB": 550.5,
+      "extraBrowserModelBytes": 0,
+      "cpuConfiguration": {
+        "strictEncoding": true,
+        "maxLength": 8192,
+        "headLength": 512,
+        "markerOnlyHead": false
+      },
+      "localPythonEnvironment": {
+        "python": "3.12.7",
+        "torch": "2.14.1+cpu",
+        "transformers": "5.0.0",
+        "numpy": "2.5.3",
+        "cpuThreads": 4,
+        "weightsSha256": "df853bf7fe424420011f3d0c47a05d7341aa9eefa7fb9f203ea4aada4ad95b72"
+      },
+      "dependencies": "Optional Python 3.11+, torch, transformers, safetensors, numpy and upstream julia package; excluded from browser bundle."
+    }
+  },
+  "runs": [
+    {
+      "provider": "julia",
+      "status": "measured",
+      "metrics": {
+        "cases": 14,
+        "valid": 14,
+        "invalid": 0,
+        "accuracy": 1,
+        "topChoiceAccuracy": 1,
+        "overallCaseAccuracy": 0.8571428571428571,
+        "labeledCases": 12,
+        "abstained": 0,
+        "ambiguousAbstentions": 0,
+        "ambiguousCases": 2,
+        "review": 1,
+        "execute": 13,
+        "workflowGuards": 1,
+        "workflowGuardsPassed": 1,
+        "medianLatencyMs": 78.3,
+        "minLatencyMs": 54.08,
+        "maxLatencyMs": 157.79,
+        "candidateRange": [
+          2,
+          20
+        ],
+        "runtimeCost": {
+          "hostedApiRequests": 0,
+          "marginalApiUsd": 0,
+          "cpuEnergyUsd": null,
+          "note": "CPU electricity and hardware cost were not measured; model download/setup/load excluded from request latency."
+        }
+      },
+      "cases": [
+        {
+          "id": "operation-buffer",
+          "kind": "operation",
+          "status": "valid",
+          "expected": "buffer",
+          "expectedAbstention": false,
+          "modelChoice": "buffer",
+          "topChoiceCorrect": true,
+          "choice": "buffer",
+          "selectedValue": "buffer",
+          "correct": true,
+          "confidence": 0.9999704940337765,
+          "effectiveConfidence": 0.9999704940337765,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 100%.",
+          "diff": {
+            "decision": "buffer"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 0.9999704940337765,
+            "intersect": 0.000009364535725219263,
+            "nearest": 8.480674924319492e-7,
+            "filter": 0.000018967951587517243,
+            "select": 1.3143239354784043e-7,
+            "export": 1.9397902466559208e-7
+          },
+          "candidateCount": 6,
+          "latencyMs": 157.79,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "operation-intersect",
+          "kind": "operation",
+          "status": "valid",
+          "expected": "intersect",
+          "expectedAbstention": false,
+          "modelChoice": "intersect",
+          "topChoiceCorrect": true,
+          "choice": "intersect",
+          "selectedValue": "intersect",
+          "correct": true,
+          "confidence": 0.9966709860302716,
+          "effectiveConfidence": 0.9966709860302716,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 100%.",
+          "diff": {
+            "decision": "intersect"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 0.00025660325296349265,
+            "intersect": 0.9966709860302716,
+            "nearest": 0.0030701963319958126,
+            "filter": 7.311415063936074e-7,
+            "select": 9.228692922022868e-7,
+            "export": 5.603739704288135e-7
+          },
+          "candidateCount": 6,
+          "latencyMs": 108.23,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "operation-nearest",
+          "kind": "operation",
+          "status": "valid",
+          "expected": "nearest",
+          "expectedAbstention": false,
+          "modelChoice": "nearest",
+          "topChoiceCorrect": true,
+          "choice": "nearest",
+          "selectedValue": "nearest",
+          "correct": true,
+          "confidence": 0.9999991834001596,
+          "effectiveConfidence": 0.9999991834001596,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 100%.",
+          "diff": {
+            "decision": "nearest"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 8.167016824463074e-9,
+            "intersect": 6.260447886651065e-9,
+            "nearest": 0.9999991834001596,
+            "filter": 7.506099743621848e-7,
+            "select": 4.135522659775985e-8,
+            "export": 1.020717474528172e-8
+          },
+          "candidateCount": 6,
+          "latencyMs": 97,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "operation-filter",
+          "kind": "operation",
+          "status": "valid",
+          "expected": "filter",
+          "expectedAbstention": false,
+          "modelChoice": "filter",
+          "topChoiceCorrect": true,
+          "choice": "filter",
+          "selectedValue": "filter",
+          "correct": true,
+          "confidence": 0.9994344061551295,
+          "effectiveConfidence": 0.9994344061551295,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 100%.",
+          "diff": {
+            "decision": "filter"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 0.00003328860908601421,
+            "filter": 0.9994344061551295,
+            "select": 0.0004815780590322529,
+            "export": 0.00005072717675241713
+          },
+          "candidateCount": 4,
+          "latencyMs": 95.03,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "operation-select",
+          "kind": "operation",
+          "status": "valid",
+          "expected": "select",
+          "expectedAbstention": false,
+          "modelChoice": "select",
+          "topChoiceCorrect": true,
+          "choice": "select",
+          "selectedValue": "select",
+          "correct": true,
+          "confidence": 0.9999998342012297,
+          "effectiveConfidence": 0.9999998342012297,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 100%.",
+          "diff": {
+            "decision": "select"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 1.6058908416053292e-8,
+            "filter": 9.786902529923862e-8,
+            "select": 0.9999998342012297,
+            "export": 5.1870836653759255e-8
+          },
+          "candidateCount": 4,
+          "latencyMs": 75.07,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "operation-export",
+          "kind": "operation",
+          "status": "valid",
+          "expected": "export",
+          "expectedAbstention": false,
+          "modelChoice": "export",
+          "topChoiceCorrect": true,
+          "choice": "export",
+          "selectedValue": "export",
+          "correct": true,
+          "confidence": 0.9999997199403836,
+          "effectiveConfidence": 0.9999997199403836,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 100%.",
+          "diff": {
+            "decision": "export"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 1.1459508181342814e-8,
+            "filter": 2.3794228980586865e-7,
+            "select": 3.0657818240866356e-8,
+            "export": 0.9999997199403836
+          },
+          "candidateCount": 4,
+          "latencyMs": 65.51,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "layer-named",
+          "kind": "layer",
+          "status": "valid",
+          "expected": "school:points",
+          "expectedAbstention": false,
+          "modelChoice": "school:points",
+          "topChoiceCorrect": true,
+          "choice": "school:points",
+          "selectedValue": "school:points",
+          "correct": true,
+          "confidence": 0.7468507354904526,
+          "effectiveConfidence": 0.7468507354904526,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.2
+          },
+          "disposition": "review",
+          "reason": "Policy review: winner probability and reported confidence is 75%.",
+          "diff": {},
+          "policy": "review",
+          "probabilities": {
+            "school:points": 0.7468507354904526,
+            "park/polygons": 0.024585812140945015,
+            "road-lines": 0.22856345236860237
+          },
+          "candidateCount": 3,
+          "latencyMs": 92.38,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "distance-meters",
+          "kind": "distance",
+          "status": "valid",
+          "expected": "250m",
+          "expectedAbstention": false,
+          "modelChoice": "250m",
+          "topChoiceCorrect": true,
+          "choice": "250m",
+          "selectedValue": 250,
+          "correct": true,
+          "confidence": 0.9998777366380605,
+          "effectiveConfidence": 0.9998796569876218,
+          "policyDefinition": {
+            "kind": "ordered",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "maxRankDistance": 1
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: probability concentrated near the ordered median is 100%.",
+          "diff": {
+            "decision": 250
+          },
+          "policy": "execute",
+          "probabilities": {
+            "25m": 0.00010999498449069175,
+            "50m": 0.0000034853222689019577,
+            "100m": 6.297332242111247e-7,
+            "250m": 0.9998777366380605,
+            "500m": 0.0000012906163371742769,
+            "1km": 0.00000686270561864348
+          },
+          "candidateCount": 6,
+          "latencyMs": 77.87,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "distance-kilometers",
+          "kind": "distance",
+          "status": "valid",
+          "expected": "1km",
+          "expectedAbstention": false,
+          "modelChoice": "1km",
+          "topChoiceCorrect": true,
+          "choice": "1km",
+          "selectedValue": 1000,
+          "correct": true,
+          "confidence": 0.9837817070593984,
+          "effectiveConfidence": 0.9861213227233764,
+          "policyDefinition": {
+            "kind": "ordered",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "maxRankDistance": 1
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: probability concentrated near the ordered median is 99%.",
+          "diff": {
+            "decision": 1000
+          },
+          "policy": "execute",
+          "probabilities": {
+            "25m": 0.00796284463914372,
+            "50m": 0.0017442864822183456,
+            "100m": 0.0023823204947497323,
+            "250m": 0.001789225660511758,
+            "500m": 0.0023396156639780077,
+            "1km": 0.9837817070593984
+          },
+          "candidateCount": 6,
+          "latencyMs": 78.73,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "ambiguous-operation",
+          "kind": "ambiguous",
+          "status": "valid",
+          "expected": null,
+          "expectedAbstention": true,
+          "modelChoice": "filter",
+          "topChoiceCorrect": null,
+          "choice": "filter",
+          "selectedValue": "filter",
+          "correct": false,
+          "confidence": 0.9995137349663549,
+          "effectiveConfidence": 0.9995137349663549,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 100%.",
+          "diff": {
+            "decision": "filter"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 0.00004802867840029653,
+            "filter": 0.9995137349663549,
+            "select": 0.00041311746409307523,
+            "export": 0.00002511889115187823
+          },
+          "candidateCount": 4,
+          "latencyMs": 75.64,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "ambiguous-distance",
+          "kind": "ambiguous",
+          "status": "valid",
+          "expected": null,
+          "expectedAbstention": true,
+          "modelChoice": "250m",
+          "topChoiceCorrect": null,
+          "choice": "250m",
+          "selectedValue": 250,
+          "correct": false,
+          "confidence": 0.6863056030242204,
+          "effectiveConfidence": 0.8717115193148014,
+          "policyDefinition": {
+            "kind": "ordered",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "maxRankDistance": 1
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: probability concentrated near the ordered median is 87%.",
+          "diff": {
+            "decision": 250
+          },
+          "policy": "execute",
+          "probabilities": {
+            "100m": 0.07038758752969147,
+            "250m": 0.6863056030242204,
+            "500m": 0.11501832876088962,
+            "1km": 0.12828848068519857
+          },
+          "candidateCount": 4,
+          "latencyMs": 73.3,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "minimum-two-options",
+          "kind": "candidate-boundary",
+          "status": "valid",
+          "expected": "export",
+          "expectedAbstention": false,
+          "modelChoice": "export",
+          "topChoiceCorrect": true,
+          "choice": "export",
+          "selectedValue": "export",
+          "correct": true,
+          "confidence": 0.943126738258204,
+          "effectiveConfidence": 0.943126738258204,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 94%.",
+          "diff": {
+            "decision": "export"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 0.05687326174179602,
+            "export": 0.943126738258204
+          },
+          "candidateCount": 2,
+          "latencyMs": 54.08,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "maximum-twenty-options",
+          "kind": "candidate-boundary",
+          "status": "valid",
+          "expected": "school-7",
+          "expectedAbstention": false,
+          "modelChoice": "school-7",
+          "topChoiceCorrect": true,
+          "choice": "school-7",
+          "selectedValue": "school-7",
+          "correct": true,
+          "confidence": 0.9946665991347144,
+          "effectiveConfidence": 0.9946665991347144,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.2
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 99%.",
+          "diff": {
+            "decision": "school-7"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "layer-0": 0.00010154725626398255,
+            "layer-1": 0.00011605646273035469,
+            "layer-2": 0.00009472261458251085,
+            "layer-3": 0.00011399226293185575,
+            "layer-4": 0.000519510794255489,
+            "layer-5": 0.0001093720548090589,
+            "layer-6": 0.0004140783464916045,
+            "school-7": 0.9946665991347144,
+            "layer-8": 0.00016059074815943193,
+            "layer-9": 0.0022570362082896672,
+            "layer-10": 0.00007499080522481979,
+            "layer-11": 0.000212463707769932,
+            "layer-12": 0.0003897700543642858,
+            "layer-13": 0.00006870395472298101,
+            "layer-14": 0.00010407173584093089,
+            "layer-15": 0.0001344775899562612,
+            "layer-16": 0.0000870361644134016,
+            "layer-17": 0.0001941088585822142,
+            "layer-18": 0.00007908033129091214,
+            "layer-19": 0.00010179091460578087
+          },
+          "candidateCount": 20,
+          "latencyMs": 80.46,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          }
+        },
+        {
+          "id": "changed-state-blocked",
+          "kind": "stale-state",
+          "status": "valid",
+          "expected": "buffer",
+          "expectedAbstention": false,
+          "modelChoice": "buffer",
+          "topChoiceCorrect": true,
+          "choice": "buffer",
+          "selectedValue": "buffer",
+          "correct": true,
+          "confidence": 0.9999999863314417,
+          "effectiveConfidence": 0.9999999863314417,
+          "policyDefinition": {
+            "kind": "winner",
+            "applyAt": 0.8,
+            "reviewAt": 0.55,
+            "minMargin": 0.15
+          },
+          "disposition": "apply",
+          "reason": "Policy apply: winner probability and reported confidence is 100%.",
+          "diff": {
+            "decision": "buffer"
+          },
+          "policy": "execute",
+          "probabilities": {
+            "buffer": 0.9999999863314417,
+            "export": 1.3668558222214792e-8
+          },
+          "candidateCount": 2,
+          "latencyMs": 58.13,
+          "provenance": {
+            "backend": "julia",
+            "runtime": "python-cpu",
+            "simulated": false,
+            "model": "SupersonicLabs/Julia-1",
+            "version": "a85b127321d580d65176c89ced8273f305745d85"
+          },
+          "workflowGuard": {
+            "planAction": "export",
+            "planPolicy": "review",
+            "preparedPolicy": "review",
+            "originalCall": {
+              "tool": "export",
+              "args": {
+                "layerId": "schools",
+                "format": "geojson"
+              }
+            },
+            "preparedGuard": {
+              "originalChoice": "export",
+              "ranking": [
+                {
+                  "id": "export",
+                  "probability": 0.9986102704458739
+                },
+                {
+                  "id": "filter",
+                  "probability": 0.001332096047446325
+                },
+                {
+                  "id": "buffer",
+                  "probability": 0.0000372816805096469
+                },
+                {
+                  "id": "select",
+                  "probability": 0.000020351826170112254
+                }
+              ],
+              "rejected": [],
+              "fallback": false,
+              "finalChoice": "export"
+            },
+            "applicationReviewOverride": true,
+            "decisionFields": {
+              "action": {
+                "selectedOptionId": "export",
+                "selectedValue": "export",
+                "confidence": 0.9986102704458739,
+                "disposition": "apply",
+                "reason": "Policy apply: winner probability and reported confidence is 100%."
+              },
+              "layer": {
+                "selectedOptionId": "schools",
+                "selectedValue": "schools",
+                "confidence": 1,
+                "disposition": "apply",
+                "reason": "Policy apply: winner probability and reported confidence is 100%."
+              },
+              "format": {
+                "selectedOptionId": "geojson",
+                "selectedValue": "geojson",
+                "confidence": 1,
+                "disposition": "apply",
+                "reason": "Policy apply: winner probability and reported confidence is 100%."
+              }
+            },
+            "passed": true,
+            "approvalBlockedWithoutConfirmation": true,
+            "approvedExecution": {
+              "success": true,
+              "status": "succeeded",
+              "durationMs": 1
+            },
+            "outputFeatureCount": 1,
+            "receiptProvenance": {
+              "backend": "julia",
+              "runtime": "python-cpu",
+              "simulated": false,
+              "model": "SupersonicLabs/Julia-1",
+              "version": "a85b127321d580d65176c89ced8273f305745d85"
+            },
+            "blocked": true,
+            "execution": {
+              "success": false,
+              "durationMs": 0,
+              "status": "not-run",
+              "error": "No legal call can execute. Inspect guard reasons."
+            },
+            "validation": {
+              "valid": false,
+              "warnings": [
+                "export: Map state is stale. Ask again before executing.",
+                "Experimental Julia decisions require review of the concrete call; high confidence can still misinterpret intent."
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "provider": "jev",
+      "status": "not-run",
+      "reason": "No explicitly configured Jev proxy endpoint. No hosted model call was made.",
+      "metrics": null,
+      "cases": []
+    }
+  ]
+}

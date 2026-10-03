@@ -63,6 +63,31 @@ function fakeClient(confidence = 0.9): DecisionClient {
 }
 
 describe("GeoJSON state and bounded candidates", () => {
+  it("requires current state on the compatibility executor and rejects a changed goal", async () => {
+    const state = makeState();
+    const plan = await createBufferDecisionPlan(state, fakeClient());
+    const layers = new Map([["roads", roads]]);
+    const absent = await executeBufferDecision(plan, layers, undefined, true);
+    expect(absent.result).toBeUndefined();
+    expect(absent.receipt.execution.error).toContain("Current decision state");
+    const stale = await executeBufferDecision(plan, layers, undefined, true, { ...state, intent: "Export instead" });
+    expect(stale.result).toBeUndefined();
+    expect(stale.receipt.execution.error).toContain("stale");
+  });
+
+  it("captures the compatibility plan's goal before asynchronous inference", async () => {
+    const state = makeState();
+    const before = await hashDecisionInputs(state);
+    const base = fakeClient();
+    const plan = await createBufferDecisionPlan(state, { ask: async (...args) => {
+      const response = await base.ask(...args);
+      state.intent = "Export instead";
+      return response;
+    } });
+    expect(plan.executionStateHash).toBe(before);
+    expect(plan.question).toBe("Create a 250 meter buffer around the major roads.");
+  });
+
   it("summarizes extents, fields, geometry, and a bounded sample", () => {
     const layer = summarizeFeatureCollection("roads", "Roads", roads, 0);
     expect(layer.geometryType).toBe("LineString");
@@ -175,7 +200,7 @@ describe("first buffer workflow", () => {
     const plan = await createBufferDecisionPlan(makeState(), ambiguous, { executeAt: 0.8, reviewAt: 0.55 });
     expect(plan.decisions.action.disposition).toBe("clarify");
     expect(plan.policy).toBe("clarify");
-    const result = await executeBufferDecision(plan, new Map([["roads", roads]]), undefined, true);
+    const result = await executeBufferDecision(plan, new Map([["roads", roads]]), undefined, true, makeState());
     expect(result.result).toBeUndefined();
     expect(result.receipt.execution.success).toBe(false);
   });
@@ -183,7 +208,7 @@ describe("first buffer workflow", () => {
   it("binds a legacy buffer call to the bounded distance that was chosen", async () => {
     const plan = await createBufferDecisionPlan(makeState(), fakeClient());
     plan.call.args.distanceMeters = 100_000;
-    const result = await executeBufferDecision(plan, new Map([["roads", roads]]));
+    const result = await executeBufferDecision(plan, new Map([["roads", roads]]), undefined, false, makeState());
     expect(result.result).toBeUndefined();
     expect(result.receipt.validation.valid).toBe(false);
     expect(result.receipt.execution.error).toMatch(/decision or call changed/);
@@ -207,7 +232,7 @@ describe("first buffer workflow", () => {
     expect(plan.policy).toBe("execute");
     expect(plan.call).toEqual({ tool: "buffer", args: { layerId: "roads", distanceMeters: 250 } });
 
-    const result = await executeBufferDecision(plan, new Map([["roads", roads]]));
+    const result = await executeBufferDecision(plan, new Map([["roads", roads]]), undefined, false, state);
     expect(result.result?.data.features[0]?.geometry?.type).toBe("Polygon");
     expect(result.receipt.validation.valid).toBe(true);
     expect(result.receipt.execution).toMatchObject({ success: true, status: "succeeded" });
@@ -225,10 +250,10 @@ describe("first buffer workflow", () => {
 
   it("rejects unknown layers before the deterministic operation", async () => {
     const plan = await createBufferDecisionPlan(makeState(), fakeClient());
-    const result = await executeBufferDecision(plan, new Map());
+    const result = await executeBufferDecision(plan, new Map(), undefined, false, makeState());
     expect(result.result).toBeUndefined();
     expect(result.receipt.validation.valid).toBe(false);
-    expect(result.receipt.execution.status).toBe("failed");
+    expect(result.receipt.execution.status).toBe("not-run");
     expect(result.receipt.execution.error).toMatch(/Unknown layer/);
   });
 

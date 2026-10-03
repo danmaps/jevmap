@@ -55,6 +55,7 @@ export interface SystemOneResponse {
   model: string;
   provenance?: DecisionProvenance;
   usageReported?: boolean;
+  answerSources?: Record<string, "model" | "deterministic">;
   answers: Record<string, JevAnswer>;
   usage: {
     input_tokens: number;

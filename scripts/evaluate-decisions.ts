@@ -31,7 +31,7 @@ export async function evaluateDecisions(args: string[]) {
       runs.push({ provider, status: "not-run", reason: "No explicitly configured Jev proxy endpoint. No hosted model call was made.", metrics: null, cases: [] });
       continue;
     }
-    const client = createDecisionClient(provider, { juliaEndpoint: process.env.JULIA_EVALUATION_ENDPOINT, jevEndpoint: process.env.JEV_EVALUATION_ENDPOINT });
+    const client = createDecisionClient(provider, { juliaEndpoint: process.env.JULIA_EVALUATION_ENDPOINT ?? "http://127.0.0.1:8765/api/julia", jevEndpoint: process.env.JEV_EVALUATION_ENDPOINT });
     const cases: Array<Record<string, unknown>> = [];
     const timings: number[] = [];
     for (const fixture of fixtureSet.cases) {

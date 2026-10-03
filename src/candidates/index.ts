@@ -31,7 +31,7 @@ export const DEFAULT_DISTANCE_CANDIDATES: readonly DistanceCandidate[] = [
 
 const DESCRIPTIONS: Record<SpatialToolId, string> = {
   buffer: "Create a distance zone around input features.",
-  intersect: "Keep geometry shared by two spatial layers.",
+  intersect: "Select input features intersecting a polygon overlay (no geometry clipping).",
   nearest: "Find the closest features between layers.",
   filter: "Filter a layer using deterministic attribute criteria.",
   select: "Select a set of features on the map.",
@@ -55,7 +55,15 @@ export function generateActionCandidates(state: JevMapState): CandidateAction[] 
     candidates.splice(1, 0, candidate("intersect", spatial.filter((id) => polygons.some((other) => other !== id))), candidate("nearest", points.length >= 2 ? points : []));
   }
 
-  return candidates.filter((item) => item.eligibleLayerIds.length > 0);
+  return candidates.map((item) => ({ ...item, eligibleLayerIds: item.eligibleLayerIds.filter((id) => {
+    const input = state.layers.find((layer) => layer.id === id)!;
+    if (input.capabilities && !input.capabilities.includes(item.id)) return false;
+    if (item.id === "nearest" || item.id === "intersect") {
+      const others = item.id === "nearest" ? points : polygons;
+      return others.some((otherId) => otherId !== id && (!state.layers.find((layer) => layer.id === otherId)!.capabilities || state.layers.find((layer) => layer.id === otherId)!.capabilities!.includes(item.id)));
+    }
+    return true;
+  }) })).filter((item) => item.eligibleLayerIds.length > 0);
 }
 
 export function generateBufferCandidates(state: JevMapState): CandidateAction[] {

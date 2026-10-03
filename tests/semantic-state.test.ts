@@ -67,7 +67,7 @@ describe("geometry-free semantic map context", () => {
     expect(result.layers.map((layer) => layer.id)).toEqual(["result", "source"]);
     expect(result.layers[0]?.provenance).toEqual({ kind: "derived", tool: "buffer", sourceLayerIds: ["source"], receiptId: "receipt-1" });
     expect(result.layers[0]?.capabilities).toEqual(["export", "select"]);
-    expect(result.layers[1]?.capabilities).toContain("intersect");
+    expect(result.layers[1]?.capabilities).not.toContain("intersect"); // The only polygon overlay explicitly forbids it.
     expect(result.layers[1]?.capabilities).not.toContain("nearest");
     expect(result.activeResultLayerIds).toEqual(["result"]);
     expect(result.previousActions).toEqual(input.previousActions);

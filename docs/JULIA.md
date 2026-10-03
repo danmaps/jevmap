@@ -1,6 +1,6 @@
 # Optional Julia 1 backend
 
-Julia 1 is the default provider and uses the real checkpoint through `/api/julia`. Jev remains available as an explicit hosted alternative through `/api/jev`. Failed Julia requests remain errors and never switch provider automatically.
+Jev-latest remains the default through `/api/jev`, as required by issue #4. Julia 1 is explicitly selectable and uses the real checkpoint through `/api/julia`. Failed requests remain errors and never switch provider automatically. All experimental Julia calls require concrete review even when field policies report apply, because the domain evaluation exposes overconfident mistakes and ambiguity.
 
 The adapter implements the upstream [named-question Python API](https://huggingface.co/SupersonicLabs/Julia-1) at revision `a85b127321d580d65176c89ced8273f305745d85`. It maps caller-defined IDs and full softmax probabilities to JevMap's existing `ChoiceAnswer`; `max_probability` becomes policy confidence. JevMap supports choice questions only on this path. Scores are uncalibrated, so confidence can be high for a wrong answer.
 
@@ -22,7 +22,7 @@ On macOS/Linux, use `.julia-env/bin/python` instead of `.julia-env\Scripts\pytho
 
 The download and startup verify the pinned weight SHA-256. The service loads the model once and listens on `http://127.0.0.1:8765/api/julia`. Its CPU settings are FP32, strict encoding, 8192 combined tokens, a 512-token question/options budget, and `marker_only_head=False`, matching the decision-head path in the upstream CPU accuracy harness. The upstream per-option token limit also applies. Oversized input fails; the adapter never silently truncates or shortlists candidates.
 
-Start the app with `npm run dev` and submit a task. The same review/approval, stale-state guard, runtime Workbench validation, deterministic geometry, and receipts apply. The decision panel and receipts identify provider, runtime, model revision, and confidence.
+Start the app with `npm run dev`, select Julia, and submit a task. Vite proxies the browser's same-origin `/api/julia` request to the local service. For production, configure the same-origin reverse proxy separately. Review/approval, stale-state guards, runtime Workbench validation, deterministic geometry, and receipts apply. The decision panel and receipts identify provider, runtime, model revision, and confidence.
 
 For another service route, set `VITE_JULIA_ENDPOINT` to its URL before starting/building the app. The local service permits Vite localhost origins on ports 5173 and 4173. Add an exact origin with `--allow-origin https://your-site.example` if needed. It refuses public network binding. For remote hosting, put it behind an authenticated, rate-limited same-origin reverse proxy; do not expose the loopback service directly.
 
@@ -31,6 +31,8 @@ For another service route, set `VITE_JULIA_ENDPOINT` to its URL before starting/
 Native Julia requests contain 2–20 legal candidates. A question with one legal candidate is resolved deterministically with probability 1 and is omitted from model inference. Empty candidate sets and sets larger than 20 fail before networking; no fake alternatives or grouped probability claims are introduced. The service also limits each request to 16 questions and 256 KiB, accepts only the typed choice schema, and serializes inference through one resident engine. Model outputs never contain executable GIS code.
 
 The first use includes package setup, model download and startup. Subsequent requests reuse the resident model. Local inference avoids API charges but still consumes CPU, memory and electricity; a zero API charge is not a measured total operating cost. `usageReported=false` prevents fabricated token/cost numbers.
+
+Receipts record `answerSources` for every Julia question. Singleton choices use `deterministic` runtime provenance; mixed/model requests use CPU provenance. The workflow's overall provenance comes from an actual inference response when present, and the live panel labels singleton fields as application decisions rather than CPU model predictions.
 
 The adapter requires exact question and candidate names, a complete normalized probability distribution, finite values, and a winner/max probability consistent with that distribution. Low confidence reaches the existing clarification or review policy. Confidence alone cannot detect an overconfident mistake or an ambiguous request. Review the actual choices and legal parameters before approving a result.
 
@@ -46,4 +48,4 @@ The runner reuses Vite's TypeScript loader, production adapters, and `parseDecis
 
 For a live Jev comparison, set `JEV_EVALUATION_ENDPOINT` to an explicitly authorized absolute server-side proxy URL. The runner does not discover credentials or endpoints. Without that setting it records Jev as `not-run` with null metrics. `JULIA_EVALUATION_ENDPOINT` overrides Julia's endpoint.
 
-See the [recorded CPU run](evaluation/julia-cpu.json) and its [interpretation](evaluation/README.md). Julia is the default for this app; no vendor benchmark is used as evidence for these spatial tasks.
+See the [recorded CPU run](evaluation/julia-cpu.json), its [interpretation](evaluation/README.md), and the [independent PR review](review/README.md). Julia remains optional; no vendor benchmark qualifies it as the default for these spatial tasks.

@@ -18,8 +18,19 @@ export type NearestCall = { tool: "nearest"; args: { layerId: string; targetLaye
 export type FilterCall = { tool: "filter"; args: { layerId: string; field: string; value: string | number | boolean | null } };
 export type SelectCall = { tool: "select"; args: { layerId: string; featureIds: string[] } };
 export type WorkbenchCall = BufferCall | ExportCall | IntersectCall | NearestCall | FilterCall | SelectCall;
-export interface WorkbenchContext { layers: ReadonlyMap<string, SpatialData>; maxFeatures?: number; maxPairComparisons?: number; maxExportBytes?: number }
+export interface WorkbenchContext { layers: ReadonlyMap<string, SpatialData>; capabilities?: ReadonlyMap<string, readonly SpatialToolId[]>; maxFeatures?: number; maxPairComparisons?: number; maxExportBytes?: number }
 export interface WorkbenchResult { tool: SpatialToolId; layerId: string; data: SpatialData }
+export class ExecutionBoundaryError extends Error {}
+export function workbenchDecisionValues(call: WorkbenchCall): Record<string, unknown> {
+  const values: Record<string, unknown> = { action: call.tool, layer: call.args.layerId };
+  if (call.tool === "buffer") values.distance = call.args.distanceMeters;
+  if (call.tool === "nearest") values.overlay = call.args.targetLayerId;
+  if (call.tool === "intersect") values.overlay = call.args.overlayLayerId;
+  if (call.tool === "filter") values.predicate = { field: call.args.field, value: call.args.value };
+  if (call.tool === "select") values.selection = call.args.featureIds;
+  if (call.tool === "export") values.format = call.args.format ?? "geojson";
+  return values;
+}
 export function featureId(feature: SpatialData["features"][number], index: number): string { return String(feature.id ?? `feature-${index}`); }
 const ARGUMENT_KEYS: Record<SpatialToolId, readonly string[]> = {
   buffer: ["layerId", "distanceMeters"], intersect: ["layerId", "overlayLayerId"], nearest: ["layerId", "targetLayerId"],
@@ -37,6 +48,8 @@ export function validateWorkbenchCall(call: WorkbenchCall, context: WorkbenchCon
   }
   const input = context.layers.get(call.args.layerId);
   if (!input) throw new Error(`Unknown layer: ${call.args.layerId}`);
+  const requiredIds = [call.args.layerId, ...("targetLayerId" in call.args ? [call.args.targetLayerId] : "overlayLayerId" in call.args ? [call.args.overlayLayerId] : [])];
+  for (const id of requiredIds) if (context.capabilities?.has(id) && !context.capabilities.get(id)!.includes(call.tool)) throw new Error(`Layer ${id} does not support ${call.tool}.`);
   if (!isPlainRecord(input) || input.type !== "FeatureCollection" || !Array.isArray(input.features)) throw new Error("Workbench input must be a GeoJSON FeatureCollection.");
   const limit = context.maxFeatures ?? 10_000;
   if (call.tool !== "export" && input.features.length > limit) throw new Error(`Browser feature limit (${limit}) exceeded. Reduce the layer before analysis.`);
@@ -116,14 +129,19 @@ function validCoordinates(value: unknown, depth: number): boolean {
     : value.every((coordinates) => validCoordinates(coordinates, depth - 1));
 }
 
-export async function executeWorkbenchCall(call: WorkbenchCall, context: WorkbenchContext): Promise<WorkbenchResult> {
+export async function executeWorkbenchCall(call: WorkbenchCall, context: WorkbenchContext, options: { beforeExecute?: () => void } = {}): Promise<WorkbenchResult> {
+  validateWorkbenchCall(call, context);
+  const serialize = () => JSON.stringify([call, [...context.layers], context.capabilities && [...context.capabilities], context.maxFeatures, context.maxPairComparisons, context.maxExportBytes]);
+  const snapshot = serialize();
+  const turf = call.tool === "export" ? undefined : await import("@turf/turf");
+  if (serialize() !== snapshot) throw new ExecutionBoundaryError("Workbench inputs changed while loading the geometry engine. Request a fresh decision.");
+  options.beforeExecute?.();
   validateWorkbenchCall(call, context);
   const input = context.layers.get(call.args.layerId)!;
   if (call.tool === "export") return { tool: call.tool, layerId: call.args.layerId, data: input };
-  const turf = await import("@turf/turf");
   let output: SpatialData;
   if (call.tool === "buffer") {
-    const buffered = turf.buffer(input, call.args.distanceMeters, { units: "meters" });
+    const buffered = turf!.buffer(input, call.args.distanceMeters, { units: "meters" });
     if (!buffered) throw new Error("Buffer operation returned no geometry.");
     output = buffered as SpatialData;
   } else if (call.tool === "filter") {
@@ -133,7 +151,7 @@ export async function executeWorkbenchCall(call: WorkbenchCall, context: Workben
     output = { type: "FeatureCollection", features: input.features.filter((feature, index) => ids.has(featureId(feature, index))) };
   } else if (call.tool === "intersect") {
     const overlay = context.layers.get(call.args.overlayLayerId)!;
-    output = { type: "FeatureCollection", features: input.features.filter((feature) => overlay.features.some((polygon) => turf.booleanIntersects(feature, polygon))) };
+    output = { type: "FeatureCollection", features: input.features.filter((feature) => overlay.features.some((polygon) => turf!.booleanIntersects(feature, polygon))) };
   } else {
     const targets = context.layers.get(call.args.targetLayerId)!;
     output = { type: "FeatureCollection", features: input.features.map((feature) => {
@@ -142,7 +160,7 @@ export async function executeWorkbenchCall(call: WorkbenchCall, context: Workben
       let closest = Number.POSITIVE_INFINITY;
       for (const candidate of targets.features) {
         if (candidate.geometry.type !== "Point") throw new Error("Nearest requires Point targets.");
-        const meters = turf.distance(turf.point(feature.geometry.coordinates), turf.point(candidate.geometry.coordinates), { units: "meters" });
+        const meters = turf!.distance(turf!.point(feature.geometry.coordinates), turf!.point(candidate.geometry.coordinates), { units: "meters" });
         if (meters < closest) { best = candidate; closest = meters; }
       }
       if (best.geometry.type !== "Point") throw new Error("Nearest requires Point targets.");

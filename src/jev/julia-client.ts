@@ -20,7 +20,7 @@ export class JuliaClient implements DecisionClient {
   private readonly timeoutMs: number;
 
   public constructor(options: JuliaClientOptions = {}) {
-    this.endpoint = options.endpoint ?? "http://127.0.0.1:8765/api/julia";
+    this.endpoint = options.endpoint ?? "/api/julia";
     this.fetchImpl = options.fetchImpl ?? globalThis.fetch.bind(globalThis);
     this.timeoutMs = options.timeoutMs ?? 120_000;
   }
@@ -28,6 +28,7 @@ export class JuliaClient implements DecisionClient {
   public async ask(state: SystemOneRequest["state"], questions: SystemOneRequest["questions"]): Promise<SystemOneResponse> {
     const nativeQuestions: Record<string, ChoiceQuestion> = {};
     const answers: Record<string, ChoiceAnswer> = {};
+    const answerSources: Record<string, "model" | "deterministic"> = {};
     if (Object.keys(questions).length < 1 || Object.keys(questions).length > 16) throw new Error("Julia requires 1–16 named questions per request.");
     for (const [name, question] of Object.entries(questions)) {
       if (question.type !== "choice") throw new Error("The Julia adapter supports bounded choice questions only.");
@@ -41,11 +42,13 @@ export class JuliaClient implements DecisionClient {
       if (keys.length === 1) {
         // A single legal candidate needs no model call and adds no invented alternatives.
         answers[name] = { type: "choice", choice: keys[0]!, confidence: 1, probabilities: { [keys[0]!]: 1 } };
+        answerSources[name] = "deterministic";
       } else {
+        answerSources[name] = "model";
         nativeQuestions[name] = { type: "choice", instructions: typeof question.instructions === "string" ? question.instructions : JSON.stringify(question.instructions ?? ""), criteria };
       }
     }
-    let provenance: DecisionProvenance = { backend: "julia", runtime: "python-cpu", model: JULIA_MODEL, version: JULIA_REVISION, simulated: false };
+    let provenance: DecisionProvenance = { backend: "julia", runtime: "deterministic", model: JULIA_MODEL, version: JULIA_REVISION, simulated: false };
     if (Object.keys(nativeQuestions).length) {
       const body = JSON.stringify({ state, questions: nativeQuestions });
       if (new TextEncoder().encode(body).byteLength > 262_144) throw new Error("Julia request exceeds the 256 KiB state/question limit; reduce map summaries.");
@@ -63,7 +66,7 @@ export class JuliaClient implements DecisionClient {
       if (!isRecord(source) || source.backend !== "julia" || source.runtime !== "python-cpu" || source.simulated !== false || source.model !== JULIA_MODEL || typeof source.version !== "string" || !source.version.trim()) throw new Error("Julia returned missing or invalid runtime provenance.");
       provenance = { backend: "julia", runtime: "python-cpu", simulated: false, model: JULIA_MODEL, version: source.version };
     }
-    return { model: JULIA_MODEL, provenance, answers, usageReported: false, usage: { input_tokens: 0, output_tokens: 0 } };
+    return { model: JULIA_MODEL, provenance, answers, answerSources, usageReported: false, usage: { input_tokens: 0, output_tokens: 0 } };
   }
 }
 

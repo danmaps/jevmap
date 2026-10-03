@@ -17,3 +17,12 @@ export function formatCost(cost: number | undefined): string {
   if (cost > 0 && cost < 0.000001) return "<$0.000001";
   return `$${cost.toFixed(6)}`;
 }
+
+export function summarizeProviderInference(plan: { model: string; provenance?: { backend: string }; inference: { inputTokens?: number; outputTokens?: number } } | undefined, selectedProvider: "jev" | "julia") {
+  const isJev = plan ? (plan.provenance?.backend ? plan.provenance.backend === "jev" : /^jev(?:-|$)/i.test(plan.model)) : selectedProvider === "jev";
+  const providerName = isJev ? "Jev" : "Julia 1 · local CPU";
+  const rate = INFERENCE_RATES.find((item) => item.name === providerName)!;
+  const inputTokens = plan ? plan.inference.inputTokens : 2000;
+  const cost = isJev ? (inputTokens === undefined ? undefined : estimateInferenceCost(inputTokens, plan?.inference.outputTokens ?? 0, rate)) : 0;
+  return { isJev, providerName, inputTokens, cost };
+}

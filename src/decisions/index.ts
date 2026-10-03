@@ -79,7 +79,7 @@ export interface DecisionFieldResult<T = unknown> {
   disposition: DecisionDisposition;
   reason: string;
   changed: boolean;
-  provenance: { model?: string; reportedOptionId?: string };
+  provenance: { model?: string; reportedOptionId?: string; source?: "model" | "deterministic" };
 }
 
 export interface DecisionSurfaceResult<TValues extends object> {
@@ -131,6 +131,7 @@ export function parseDecisionSurface<TValues extends object>(
 
   for (const [id, field] of Object.entries(surface.fields) as [string, DecisionField<unknown>][]) {
     const result = parseField(id, field, answers[id], model);
+    if (isRecord(envelope.answerSources) && ["model", "deterministic"].includes(String(envelope.answerSources[id]))) result.provenance.source = envelope.answerSources[id] as "model" | "deterministic";
     fields[id] = result;
     if (result.disposition === "apply" && result.changed) diff[id] = result.selectedValue;
   }
@@ -188,10 +189,10 @@ function parseField(id: string, field: DecisionField<unknown>, raw: unknown, mod
  */
 export function evaluateDecisionFieldPolicy<T>(result: DecisionFieldResult<T>, field: DecisionField<T>): DecisionFieldResult<T> {
   if (result.disposition === "reject" || !isProbability(result.confidence) || result.selectedOptionId === undefined) return result;
-  return evaluatePolicy(result, field) as DecisionFieldResult<T>;
+  return evaluatePolicy(result, field, true) as DecisionFieldResult<T>;
 }
 
-function evaluatePolicy(result: DecisionFieldResult, field: DecisionField<unknown>): DecisionFieldResult {
+function evaluatePolicy(result: DecisionFieldResult, field: DecisionField<unknown>, executionGate = false): DecisionFieldResult {
   const policy = field.policy;
   const confidence = result.confidence!;
   if (policy.kind === "confirmation") {
@@ -221,6 +222,7 @@ function evaluatePolicy(result: DecisionFieldResult, field: DecisionField<unknow
   // Options are a declared ordinal scale. Never invent or interpolate a parameter value.
   const weights = field.options.map((option) => result.probabilities[option.id] ?? 0);
   const keepWeight = result.probabilities[KEEP_CURRENT_OPTION_ID] ?? 0;
+  if (executionGate && result.selectedOptionId === KEEP_CURRENT_OPTION_ID) return thresholdResult(result, Math.min(confidence, keepWeight), policy, "keep probability and reported confidence");
   if (keepWeight >= Math.max(...weights)) {
     return { ...result, disposition: "clarify", reason: "The distribution does not distinguish changing the value from keeping it." };
   }
@@ -236,7 +238,7 @@ function evaluatePolicy(result: DecisionFieldResult, field: DecisionField<unknow
     ...result, selectedOptionId: median.id, selectedValue: median.value,
     changed: !equalValues(median.value, field.currentValue),
   }, concentration, policy, "probability concentrated near the ordered median");
-  if (!evaluated.changed) return { ...evaluated, disposition: "keep", reason: "The ordered distribution supports the current value." };
+  if (!evaluated.changed && !executionGate) return { ...evaluated, disposition: "keep", reason: "The ordered distribution supports the current value." };
   return evaluated;
 }
 

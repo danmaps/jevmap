@@ -48,6 +48,8 @@ describe("Julia requests", () => {
     expect(request).toEqual({ state: { intent: "Schools" }, questions: { layer: { type: "choice", instructions: "Choose the input", criteria } } });
     expect(result.provenance).toEqual(provenance);
     expect(result.usageReported).toBe(false);
+    expect(fetchImpl.mock.calls[0]![0]).toBe("/api/julia");
+    expect(result.answerSources).toEqual({ layer: "model" });
   });
 
   it.each([2, 20])("supports the native %i-candidate boundary", async (count) => {
@@ -63,6 +65,8 @@ describe("Julia requests", () => {
     const result = await new JuliaClient({ fetchImpl }).ask({}, { layer: choiceQuestion("Choose", { only: "Only input" }) });
     expect(fetchImpl).not.toHaveBeenCalled();
     expect(result.answers.layer).toEqual({ type: "choice", choice: "only", confidence: 1, probabilities: { only: 1 } });
+    expect(result.provenance?.runtime).toBe("deterministic");
+    expect(result.answerSources).toEqual({ layer: "deterministic" });
   });
 
   it("rejects excess, empty, unsupported and oversized questions before networking", async () => {
@@ -93,10 +97,32 @@ describe("Julia requests", () => {
 });
 
 describe("explicit provider selection", () => {
-  it("uses Julia as the default while keeping Jev explicitly available", () => {
+  it("requires concrete review for high-confidence Julia instead of silently auto-executing", async () => {
+    const data = { type: "FeatureCollection", features: [{ type: "Feature", id: "school-1", properties: {}, geometry: { type: "Point", coordinates: [0, 0] } }] };
+    const state = { intent: "Buffer schools 250 meters", viewport: { bbox: [-1,-1,1,1] as [number,number,number,number], zoom: 12 }, layers: [summarizeFeatureCollection("schools", "Schools", data as never)], selection: { featureIds: [] }, previousActions: [] };
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      const request = JSON.parse(String(init?.body));
+      const answers = Object.fromEntries(Object.entries(request.questions).map(([name, question]) => {
+        const keys = Object.keys((question as { criteria: object }).criteria);
+        const choice = name === "action" ? "buffer" : "250m";
+        return [name, { type: "choice", choice, max_probability: 0.99, probabilities: Object.fromEntries(keys.map((key) => [key, key === choice ? 0.99 : 0.01 / (keys.length - 1)])) }];
+      }));
+      return response(answers);
+    };
+    const context = { layers: new Map([["schools", data as never]]) };
+    const plan = await prepareSpatialDecision(await createSpatialDecisionPlan(state, createDecisionClient("julia", { fetchImpl }), context), state, context);
+    expect(plan.decisions.action.disposition).toBe("apply");
+    expect(plan.policy).toBe("review");
+    expect(plan.proposalPolicy).toBe("review");
+    expect((await executeSpatialDecision({ ...plan, policy: "execute" }, state, context)).result).toBeUndefined();
+    const pending = spatialDecisionReceipt(plan);
+    expect((await executeSpatialDecision(plan, state, context, { approved: true, receipt: pending })).result?.tool).toBe("buffer");
+  });
+
+  it("keeps Jev-latest as default and Julia explicitly available", () => {
     expect(createDecisionClient("julia")).toBeInstanceOf(JuliaClient);
     expect(createDecisionClient("julia").model).toBe(JULIA_MODEL);
-    expect(createDecisionClient().model).toBe(JULIA_MODEL);
+    expect(createDecisionClient().model).toBe("jev-latest");
     expect(createDecisionClient("jev", { jevModel: "jev-pinned" }).model).toBe("jev-pinned");
     expect(() => createDecisionClient("invalid" as never)).toThrow("Unknown decision provider");
   });
@@ -115,13 +141,15 @@ describe("explicit provider selection", () => {
       return response(answers);
     };
     const plan = await createBufferDecisionPlan(state, createDecisionClient("julia", { fetchImpl }));
+    expect(plan.decisionPayloads[0]?.model).toBe(JULIA_MODEL);
     expect(plan.policy).toBe("review");
     expect(createPendingDecisionReceipt(plan).execution.status).toBe("pending");
-    const execution = await executeBufferDecision(plan, new Map([["schools", spatialData]]), undefined, true);
+    const execution = await executeBufferDecision(plan, new Map([["schools", spatialData]]), undefined, true, state);
     expect(execution.receipt.execution.success).toBe(true);
     expect(execution.result?.data.features.length).toBe(1);
+    expect(execution.receipt.stateDiff?.action).toBe("buffer");
     const invalid = { ...plan, call: { tool: "buffer" as const, args: { ...plan.call.args, distanceMeters: -1 } } };
-    expect((await executeBufferDecision(invalid, new Map([["schools", spatialData]]), undefined, true)).receipt.validation.valid).toBe(false);
+    expect((await executeBufferDecision(invalid, new Map([["schools", spatialData]]), undefined, true, state)).receipt.validation.valid).toBe(false);
   });
 
   it("preserves modern workflow approvals, stale guards and receipt provenance", async () => {
@@ -151,6 +179,8 @@ describe("explicit provider selection", () => {
     const stale = await executeSpatialDecision(plan, { ...state, intent: "Export instead" }, context, { approved: true, receipt: pending });
     expect(stale.result).toBeUndefined();
     expect(stale.receipt.execution.status).toBe("not-run");
+    expect(stale.receipt.id).toBe(pending.id);
+    expect(stale.receipt.stateDiff).toEqual({});
     expect(stale.receipt.validation.warnings.join(" ")).toContain("stale");
     const invalid = { ...plan, calls: { buffer: { tool: "buffer" as const, args: { layerId: "schools", distanceMeters: -1 } } }, call: { tool: "buffer" as const, args: { layerId: "schools", distanceMeters: -1 } } };
     expect((await executeSpatialDecision(invalid, state, context, { approved: true })).result).toBeUndefined();

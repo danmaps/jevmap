@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { estimateInferenceCost, formatCost, INFERENCE_RATES } from "../src/inference-cost.js";
+import { estimateInferenceCost, formatCost, INFERENCE_RATES, summarizeProviderInference } from "../src/inference-cost.js";
 import { parseSystemOneResponse } from "../src/jev/index.js";
 
 describe("inference cost estimates", () => {
+  it("uses provider provenance and keeps missing hosted usage unavailable", () => {
+    expect(summarizeProviderInference({ model: "custom-alias", provenance: { backend: "jev" }, inference: {} }, "julia")).toMatchObject({ isJev: true, providerName: "Jev", cost: undefined });
+    expect(summarizeProviderInference({ model: "custom-alias", provenance: { backend: "jev" }, inference: { inputTokens: 2000 } }, "julia").cost).toBeCloseTo(0.000084, 9);
+    expect(summarizeProviderInference(undefined, "jev").providerName).toBe("Jev");
+    expect(summarizeProviderInference(undefined, "julia").cost).toBe(0);
+  });
   it("uses per-million rates and does not charge Jev output tokens", () => {
     expect(estimateInferenceCost(2000, 300, INFERENCE_RATES[0])).toBeCloseTo(0.000084, 9);
     expect(estimateInferenceCost(2000, 300, INFERENCE_RATES[1])).toBe(0);

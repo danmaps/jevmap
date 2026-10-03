@@ -6,7 +6,7 @@ export type DecisionProvider = "julia" | "jev";
 
 export interface DecisionProvenance {
   backend: DecisionProvider;
-  runtime: "remote" | "python-cpu" | "simulated";
+  runtime: "remote" | "python-cpu" | "simulated" | "deterministic";
   model: string;
   version: string;
   simulated: boolean;
@@ -18,8 +18,8 @@ export interface DecisionClient {
 }
 
 export const DECISION_PROVIDERS = [
-  { id: "julia", label: "Julia 1 · local CPU", description: "Default decision model through the local CPU service." },
-  { id: "jev", label: "Jev · hosted", description: "Hosted decision model through the server-side proxy." },
+  { id: "jev", label: "Jev · hosted", description: "Default hosted decision model through the server-side proxy." },
+  { id: "julia", label: "Julia 1 · local CPU", description: "Experimental local CPU decisions require concrete review." },
 ] as const;
 
 export interface DecisionClientOptions {
@@ -30,7 +30,7 @@ export interface DecisionClientOptions {
 }
 
 /** Explicit selection only: runtime failures never silently switch provider. */
-export function createDecisionClient(provider: DecisionProvider = "julia", options: DecisionClientOptions = {}): DecisionClient {
+export function createDecisionClient(provider: DecisionProvider = "jev", options: DecisionClientOptions = {}): DecisionClient {
   if (provider === "julia") return new JuliaClient({ endpoint: options.juliaEndpoint, fetchImpl: options.fetchImpl });
   if (provider !== "jev") throw new Error(`Unknown decision provider: ${String(provider)}`);
   const client = new JevProxyClient({ endpoint: options.jevEndpoint, model: options.jevModel ?? "jev-latest", fetchImpl: options.fetchImpl });

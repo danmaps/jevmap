@@ -6,7 +6,7 @@ import { createSpatialDecisionPlan, prepareSpatialDecision, spatialDecisionRecei
 import type { SpatialData } from "./analysis/index.js";
 import { createDecisionClient, DECISION_PROVIDERS, type DecisionProvider } from "./jev/providers.js";
 import { renderDecisionInterpretation, renderInterpretationError } from "./interpretation/index.js";
-import { estimateInferenceCost, formatCost, INFERENCE_RATES } from "./inference-cost.js";
+import { estimateInferenceCost, formatCost, INFERENCE_RATES, summarizeProviderInference } from "./inference-cost.js";
 import { MapLibreAdapter } from "./map/index.js";
 import { toReceiptSummary, type ActionReceipt } from "./receipts/index.js";
 import { parseFeatureCollection } from "./state/geojson.js";
@@ -78,7 +78,7 @@ app.innerHTML = `
         <a class="demo-download" href="${import.meta.env.BASE_URL}demo/los-angeles-points.geojson" download>Download demo GeoJSON ↗</a>
         <label class="provider-label" for="decision-provider">Decision provider</label>
         <select id="decision-provider">${DECISION_PROVIDERS.map((provider) => `<option value="${provider.id}">${provider.label}</option>`).join("")}</select>
-        <p id="provider-note" class="metric-note">Julia 1 runs through the local CPU service.</p>
+        <p id="provider-note" class="metric-note">Jev uses the server-side proxy. Credentials stay on the server.</p>
         <button id="run" type="button">Interpret task <span>↗</span></button>
         <div id="result" class="result" aria-live="polite" aria-busy="false">
           <div class="result-empty">Choose a spatial goal and ask for a buffer.<br /><span>Every operation is validated before it runs.</span></div>
@@ -89,8 +89,8 @@ app.innerHTML = `
         <details class="architecture-panel">
           <summary>How this map works <span>↗</span></summary>
           <div class="loop"><span>MAP STATE</span><b>→</b><span>JEV DECISION</span><b>→</b><span>SPATIAL TOOLS</span></div>
-          <p class="architecture-note">Designed around the <a href="https://workbench.dannymcvey.com/" target="_blank" rel="noopener noreferrer">Spatial Workbench</a> pattern: Julia chooses a bounded action, validated spatial tools compute the geometry, and the map displays the result. This app implements that tool layer locally with Turf.js and renders it with MapLibre; the separate Spatial Workbench service is not connected.</p>
-          <p class="footnote">Julia runs through a local CPU service; hosted Jev remains available as an explicit alternative.</p>
+          <p class="architecture-note">Designed around the <a href="https://workbench.dannymcvey.com/" target="_blank" rel="noopener noreferrer">Spatial Workbench</a> pattern: a decision model chooses a bounded action, validated spatial tools compute the geometry, and the map displays the result. This app implements that tool layer locally with Turf.js and renders it with MapLibre; the separate Spatial Workbench service is not connected.</p>
+          <p class="footnote">Jev is the default; optional Julia decisions run locally and require review.</p>
         </details>
         </div>
       </aside>
@@ -166,8 +166,9 @@ providerSelect.addEventListener("change", () => {
   finishPendingDecision("The decision provider changed. Request a fresh interpretation.");
   activePlan = undefined;
   requiredElement<HTMLElement>("#provider-note").textContent = providerSelect.value === "julia"
-    ? "Julia 1 runs through the local CPU service."
+    ? "Experimental Julia decisions run through the local CPU service and require review."
     : "Jev uses the server-side proxy. Credentials stay on the server.";
+  renderInferenceMetrics();
 });
 renderInferenceMetrics();
 
@@ -255,7 +256,7 @@ async function approvePendingPlan(): Promise<void> {
 }
 
 function applyResult(plan: SpatialDecisionPlan, result: import("./workbench/index.js").WorkbenchResult, receipt: ActionReceipt): void {
-  for (const [id, field] of Object.entries(plan.decisions)) if (field.disposition !== "reject" && field.disposition !== "clarify") currentDecisionValues[id] = field.selectedValue;
+  Object.assign(currentDecisionValues, structuredClone(receipt.stateDiff ?? {}));
   currentDecisionValues.action = result.tool;
   if (result.tool === "export") {
     const link = document.createElement("a");
@@ -401,20 +402,16 @@ function renderReceipts(): void {
 function renderInferenceMetrics(plan?: SpatialDecisionPlan): void {
   const metrics = requiredElement<HTMLElement>("#inference-metrics");
   const wasOpen = metrics.querySelector("details")?.open ?? false;
-  const inputTokens = plan ? plan.inference.inputTokens : 2000;
-  const isJev = plan ? /^jev(?:-|$)/i.test(plan.model) : false;
-  const providerName = isJev ? "Jev" : "Julia 1 · local CPU";
-  const selectedRate = INFERENCE_RATES.find((rate) => rate.name === providerName)!;
-  const cost = isJev && inputTokens !== undefined ? estimateInferenceCost(inputTokens, 0, selectedRate) : estimateInferenceCost(0, 0, selectedRate);
+  const { inputTokens, isJev, providerName, cost } = summarizeProviderInference(plan, providerSelect.value as DecisionProvider);
   const latency = plan ? `${(plan.inference.durationMs / 1000).toFixed(2)} s` : "Run to measure";
   const tokenBudget = inputTokens ?? 2000;
   metrics.innerHTML = `
     <div class="panel-kicker">INFERENCE / COST & SPEED</div>
     <div class="metric-cards">
       <div><small>${plan ? `${providerName} request time` : `${providerName} request time`}</small><strong>${latency}</strong></div>
-      <div><small>${isJev && plan ? "Estimated API cost" : "Estimated inference cost"}</small><strong>${formatCost(cost)}</strong></div>
+      <div><small>${isJev ? plan ? "Estimated API cost" : "Illustrative API cost" : "API inference charge"}</small><strong>${formatCost(cost)}</strong></div>
     </div>
-    <p class="metric-note">${plan ? "Measured round trip, including service/network and proxy. GIS execution is timed separately." : "Julia 1 runs locally with no API charge. Select Jev to measure hosted inference and token-based cost."}</p>
+    <p class="metric-note">${plan ? "Measured round trip, including service/network and proxy. GIS execution is timed separately." : isJev ? "Run Jev to measure hosted inference; the initial cost assumes 2,000 input tokens." : "Julia has no API charge. Local CPU, memory and electricity costs are unmeasured."}</p>
     <details class="cost-comparison" ${wasOpen ? "open" : ""}>
       <summary>Compare provider costs</summary>
       <table><caption>Illustrative cost per decision request</caption><thead><tr><th scope="col">Model</th><th scope="col">USD / call</th><th scope="col">Time</th></tr></thead><tbody>
@@ -444,6 +441,7 @@ function setBusy(busy: boolean): void {
   runButton.disabled = busy;
   fileInput.disabled = busy;
   providerSelect.disabled = busy;
+  goalInput.disabled = busy;
   document.querySelectorAll<HTMLButtonElement>("[data-example]").forEach((button) => { button.disabled = busy; });
   resultElement.setAttribute("aria-busy", String(busy));
   runButton.querySelector("span")?.replaceChildren(document.createTextNode(busy ? "…" : "↗"));

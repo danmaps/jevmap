@@ -195,10 +195,110 @@ describe("spatial decision surface integration", () => {
     expect(executed.receipt.execution.status).toBe("succeeded");
     expect(executed.receipt.id).toBe(held.receipt.id);
     expect(executed.receipt.stateDiff?.action).toBe("buffer");
-  });
+  }, 15_000); // First real Turf import can exceed 5 s on a cold/contended filesystem.
 });
 
 describe("deterministic pre-execution guards", () => {
+  it("detaches successful array-valued receipt diffs from the executed plan", async () => {
+    const { state, context } = setup();
+    const result = await executeSpatialDecision(await createSpatialDecisionPlan(state, fakeClient({ action: "select" }), context), state, context);
+    (result.plan.decisions.selection.selectedValue as string[]).push("unavailable");
+    expect(result.receipt.stateDiff?.selection).toEqual(["feature-0", "feature-1"]);
+    expect(result.receipt.call).toEqual({ tool: "select", args: { layerId: "source", featureIds: ["feature-0", "feature-1"] } });
+  });
+
+  it("rejects approval receipts from another concrete plan", async () => {
+    const { state, context } = setup();
+    const first = await prepareSpatialDecision(await createSpatialDecisionPlan(state, fakeClient({ confidence: 0.7 }), context), state, context);
+    const receipt = spatialDecisionReceipt(first);
+    const second = await prepareSpatialDecision(await createSpatialDecisionPlan(state, fakeClient({ action: "export", confidence: 0.7 }), context), state, context);
+    const result = await executeSpatialDecision(second, state, context, { approved: true, receipt });
+    expect(result.result).toBeUndefined();
+    expect(result.receipt.id).not.toBe(receipt.id);
+    expect(result.receipt.guard?.rejected.at(-1)?.reason).toContain("Approval receipt");
+  });
+
+  it("does not rewrite historical receipts through mutable plan references", async () => {
+    const { state, context } = setup();
+    const plan = await createSpatialDecisionPlan(state, fakeClient(), context);
+    const receipt = spatialDecisionReceipt(plan);
+    plan.decisions.distance.selectedValue = 100_000;
+    plan.decisionPayloads[0]!.model = "fabricated";
+    expect(receipt.decisions?.distance.selectedValue).toBe(250);
+    expect(receipt.decisionPayloads?.[0]?.model).toBe("jev-latest");
+  });
+
+  it("invalidates approval when runtime limits, capabilities, active results or history change", async () => {
+    for (const change of ["limits", "capabilities", "active-results", "history"] as const) {
+      const { state, context } = setup();
+      const plan = await createSpatialDecisionPlan(state, fakeClient({ confidence: 0.7 }), context);
+      if (change === "limits") context.maxFeatures = 1;
+      else if (change === "capabilities") context.capabilities = new Map([["source", ["export"]]]);
+      else if (change === "active-results") state.activeResultLayerIds = ["source"];
+      else state.previousActions.push({ id: "new-result", selectedAction: "select", confidence: 1, success: true });
+      const result = await executeSpatialDecision(plan, state, context, { approved: true });
+      expect(result.result).toBeUndefined();
+      expect(result.receipt.guard?.fallback).toBe(false);
+      expect(result.receipt.guard?.rejected[0]?.reason).toContain("stale");
+    }
+  });
+
+  it("catches runtime edits made while the complete-data digest is in flight", async () => {
+    const { state, context } = setup(points(30));
+    const plan = await createSpatialDecisionPlan(state, fakeClient(), context);
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    let calls = 0;
+    const spy = vi.spyOn(crypto.subtle, "digest").mockImplementation(async (...args) => {
+      if (++calls === 3) context.layers.get("source")!.features[29]!.properties!.kind = "edited";
+      return digest(...args);
+    });
+    try {
+      const result = await executeSpatialDecision(plan, state, context, { approved: true });
+      expect(result.result).toBeUndefined();
+      expect(result.receipt.execution.status).toBe("not-run");
+    } finally { spy.mockRestore(); }
+  });
+
+  it("enforces explicit layer capabilities when generating legal choices", async () => {
+    const { state, context } = setup();
+    state.layers[0]!.capabilities = ["export"];
+    const client = fakeClient({ action: "export" });
+    const plan = await createSpatialDecisionPlan(state, client, context);
+    const question = client.requests[0]!.questions.action;
+    if (question.type !== "choice") throw new Error("Expected choice");
+    expect(Object.keys(question.criteria)).toEqual(["export"]);
+    expect((await executeSpatialDecision(plan, state, context)).result?.tool).toBe("export");
+  });
+
+  it("does not let a weak retained input layer authorize a new spatial effect", async () => {
+    const { state, context } = setup();
+    const base = fakeClient();
+    const client: DecisionClient = { ask: async (state, questions) => {
+      const response = await base.ask(state, questions);
+      if (questions.layer) response.answers.layer = { type: "choice", choice: "__keep__", confidence: 0.1, probabilities: { source: 0.9, __keep__: 0.1 } };
+      return response;
+    } };
+    const plan = await createSpatialDecisionPlan(state, client, context, { layer: "source" });
+    expect(plan.decisions.layer.disposition).toBe("keep");
+    expect(plan.policy).toBe("clarify");
+    expect((await executeSpatialDecision(plan, state, context, { approved: true })).result).toBeUndefined();
+  });
+
+  it("blocks a call mutated while its binding digest is in flight", async () => {
+    const { state, context } = setup();
+    const plan = await createSpatialDecisionPlan(state, fakeClient(), context);
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    const spy = vi.spyOn(crypto.subtle, "digest").mockImplementationOnce(async (...args) => {
+      if (plan.calls.buffer?.tool === "buffer") plan.calls.buffer.args.distanceMeters = 100_000;
+      return digest(...args);
+    });
+    try {
+      const result = await executeSpatialDecision(plan, state, context, { approved: true });
+      expect(result.result).toBeUndefined();
+      expect(result.receipt.execution.success).toBe(false);
+    } finally { spy.mockRestore(); }
+  });
+
   it("revalidates the highest-ranked choice and records a reviewed, lower-ranked valid fallback", async () => {
     const { state, context } = setup(points(2), [["target", points(2)]]);
     context.maxPairComparisons = 1;
@@ -221,6 +321,8 @@ describe("deterministic pre-execution guards", () => {
     expect(executed.result?.tool).toBe("select");
     expect(executed.receipt.selectedAction).toBe("select");
     expect(executed.receipt.stateDiff?.action).toBe("select");
+    expect(executed.receipt.stateDiff?.overlay).toBeUndefined();
+    expect(executed.receipt.stateDiff?.selection).toEqual(["feature-0", "feature-1"]);
     expect(executed.receipt.guard?.originalChoice).toBe("nearest");
   });
 

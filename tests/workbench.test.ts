@@ -35,6 +35,18 @@ const calls: Record<WorkbenchCall['tool'], WorkbenchCall> = {
 function invalidCall(value: unknown): WorkbenchCall { return value as WorkbenchCall; }
 
 describe("deterministic spatial workbench", () => {
+  it("rejects changes across the lazy geometry import even when the new call is individually valid", async () => {
+    const call = { tool: "buffer" as const, args: { layerId: "origin", distanceMeters: 100 } };
+    const execution = executeWorkbenchCall(call, context());
+    call.args.distanceMeters = 100_000;
+    await expect(execution).rejects.toThrow("inputs changed");
+  });
+
+  it("enforces operation capabilities for both input and target layers", () => {
+    expect(() => validateWorkbenchCall(calls.buffer, context({ capabilities: new Map([["points", ["export"]]]) }))).toThrow("does not support buffer");
+    expect(() => validateWorkbenchCall(calls.nearest, context({ capabilities: new Map([["targets", ["export"]]]) }))).toThrow("does not support nearest");
+  });
+
   it("implements all six registered tools with concrete geometry or serialization results", () => {
     expect(WORKBENCH_REGISTRY.map((tool) => tool.id)).toEqual(["buffer", "intersect", "nearest", "filter", "select", "export"]);
     expect(WORKBENCH_REGISTRY.every((tool) => tool.status === "implemented")).toBe(true);

@@ -1,4 +1,5 @@
 import type { ActionReceipt } from "../receipts/index.js";
+import { workbenchDecisionValues } from "../workbench/index.js";
 
 const DISPOSITION_LABELS: Record<string, string> = {
   apply: "Applied by policy",
@@ -19,7 +20,7 @@ export function renderDecisionInterpretation(receipt: ActionReceipt): string {
   const stateDiff = record(source.stateDiff) ?? {};
   const action = fields ? record(fields.action) : undefined;
   const fieldRows = fields && Object.keys(fields).length > 0
-    ? Object.entries(fields).map(([id, field]) => renderField(id, field, guard, execution, stateDiff)).join("")
+    ? Object.entries(fields).map(([id, field]) => renderField(id, field, guard, execution, stateDiff, receipt.call)).join("")
     : '<p class="interpretation-error" role="alert">No valid decision fields were recorded.</p>';
   const backend = typeof provenance.backend === "string" ? ({ jev: "Jev · hosted", julia: "Julia · local CPU", demo: "Demo · simulated" } as Record<string, string>)[provenance.backend] ?? provenance.backend : undefined;
   const originParts = [backend, provenance.model ?? source.model, provenance.runtime]
@@ -57,7 +58,7 @@ export function renderInterpretationError(message: string): string {
   </section>`;
 }
 
-function renderField(id: string, value: unknown, guard: Record<string, unknown> | undefined, execution: Record<string, unknown>, stateDiff: Record<string, unknown>): string {
+function renderField(id: string, value: unknown, guard: Record<string, unknown> | undefined, execution: Record<string, unknown>, stateDiff: Record<string, unknown>, call: ActionReceipt["call"]): string {
   const field = record(value);
   if (!field) {
     return `<article class="interpretation-field" data-field-id="${escapeHtml(id)}" data-disposition="error">
@@ -70,12 +71,18 @@ function renderField(id: string, value: unknown, guard: Record<string, unknown> 
     ? field.disposition : "error";
   let appliedDisposition = disposition;
   let appliedLabel = DISPOSITION_LABELS[disposition];
-  if (id === "action" && guard?.fallback === true && typeof guard.finalChoice === "string" && guard.finalChoice !== guard.originalChoice) {
+  if (guard?.fallback === true && call && !Object.hasOwn(workbenchDecisionValues(call), id)) {
+    appliedDisposition = "keep";
+    appliedLabel = "Not used by fallback";
+  } else if (id === "action" && guard?.fallback === true && typeof guard.finalChoice === "string" && guard.finalChoice !== guard.originalChoice) {
     appliedDisposition = "fallback";
     appliedLabel = "Replaced by fallback";
   } else if (id === "action" && guard && !guard.finalChoice && Array.isArray(guard.rejected) && guard.rejected.some((item) => record(item)?.id === guard.originalChoice)) {
     appliedDisposition = "reject";
     appliedLabel = "Rejected by execution guard";
+  } else if (guard && !guard.finalChoice && Array.isArray(guard.rejected) && guard.rejected.length && ["apply", "review"].includes(disposition)) {
+    appliedDisposition = "reject";
+    appliedLabel = "Not applied · execution blocked";
   } else if (disposition === "review" && execution.status === "succeeded" && Object.hasOwn(stateDiff, id)) {
     appliedDisposition = "apply";
     appliedLabel = "Applied after approval";
@@ -113,6 +120,7 @@ function renderField(id: string, value: unknown, guard: Record<string, unknown> 
     <div class="interpretation-selection"><strong>${escapeHtml(selected)}</strong><span class="interpretation-probability">${probability === undefined ? "Probability unavailable" : `${formatPercent(probability)} probability`}</span></div>
     <span class="disposition disposition-${appliedDisposition}">${appliedLabel}</span>
     ${policyChoice}${unchanged}
+    ${provenance?.source === "deterministic" ? '<p class="interpretation-note">Single legal option · determined by the application; no model inference.</p>' : ""}
     <details class="interpretation-distribution"><summary>All option probabilities</summary>
       ${distribution}
       <p class="interpretation-note">Returned confidence: ${confidence === undefined ? "unavailable" : formatPercent(confidence)}</p>
