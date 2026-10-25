@@ -10,7 +10,7 @@ export interface JevProxyClientOptions {
 
 export class JevProxyClient implements DecisionClient {
   private readonly endpoint: string;
-  private readonly model: string;
+  public readonly model: string;
   private readonly fetchImpl: typeof fetch;
 
   public constructor(options: JevProxyClientOptions = {}) {

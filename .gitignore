@@ -1,5 +1,8 @@
 node_modules/
 dist/
+.julia-env/
+.julia-model/
+__pycache__/
 .env
 .env.*
 !.env.example

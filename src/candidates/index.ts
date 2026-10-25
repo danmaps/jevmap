@@ -31,7 +31,7 @@ export const DEFAULT_DISTANCE_CANDIDATES: readonly DistanceCandidate[] = [
 
 const DESCRIPTIONS: Record<SpatialToolId, string> = {
   buffer: "Create a distance zone around input features.",
-  intersect: "Keep geometry shared by two spatial layers.",
+  intersect: "Select input features intersecting a polygon overlay (no geometry clipping).",
   nearest: "Find the closest features between layers.",
   filter: "Filter a layer using deterministic attribute criteria.",
   select: "Select a set of features on the map.",
@@ -40,18 +40,30 @@ const DESCRIPTIONS: Record<SpatialToolId, string> = {
 
 export function generateActionCandidates(state: JevMapState): CandidateAction[] {
   const layerIds = state.layers.map((layer) => layer.id);
+  if (layerIds.length === 0) return [];
+  const spatial = state.layers.filter((layer) => layer.featureCount > 0 && layer.summary.geometryTypes.length > 0 && layer.summary.geometryTypes.every((type) => !["Null", "Unknown", "GeometryCollection"].includes(type))).map((layer) => layer.id);
+  const points = state.layers.filter((layer) => layer.featureCount > 0 && layer.summary.geometryTypes.length === 1 && layer.summary.geometryTypes[0] === "Point").map((layer) => layer.id);
+  const polygons = state.layers.filter((layer) => layer.featureCount > 0 && layer.summary.geometryTypes.length > 0 && layer.summary.geometryTypes.every((type) => ["Polygon", "MultiPolygon"].includes(type))).map((layer) => layer.id);
   const candidates: CandidateAction[] = [
-    candidate("buffer", layerIds),
-    candidate("filter", layerIds),
+    candidate("buffer", spatial),
+    candidate("filter", state.layers.filter((layer) => layer.fields.length > 0).map((layer) => layer.id)),
     candidate("select", layerIds),
     candidate("export", layerIds),
   ];
 
   if (layerIds.length >= 2) {
-    candidates.splice(1, 0, candidate("intersect", layerIds), candidate("nearest", layerIds));
+    candidates.splice(1, 0, candidate("intersect", spatial.filter((id) => polygons.some((other) => other !== id))), candidate("nearest", points.length >= 2 ? points : []));
   }
 
-  return candidates;
+  return candidates.map((item) => ({ ...item, eligibleLayerIds: item.eligibleLayerIds.filter((id) => {
+    const input = state.layers.find((layer) => layer.id === id)!;
+    if (input.capabilities && !input.capabilities.includes(item.id)) return false;
+    if (item.id === "nearest" || item.id === "intersect") {
+      const others = item.id === "nearest" ? points : polygons;
+      return others.some((otherId) => otherId !== id && (!state.layers.find((layer) => layer.id === otherId)!.capabilities || state.layers.find((layer) => layer.id === otherId)!.capabilities!.includes(item.id)));
+    }
+    return true;
+  }) })).filter((item) => item.eligibleLayerIds.length > 0);
 }
 
 export function generateBufferCandidates(state: JevMapState): CandidateAction[] {

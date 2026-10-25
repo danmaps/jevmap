@@ -29,5 +29,8 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Julia service contract (no model download)
+        run: python3 scripts/test-julia-service.py
+
       - name: Build
         run: npm run build

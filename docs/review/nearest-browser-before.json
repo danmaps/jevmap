@@ -1,0 +1,740 @@
+{
+  "id": "506d74a6-4d88-4e51-a544-f69383248916",
+  "timestamp": "2026-10-03T00:28:56.078Z",
+  "stateHash": "791682ae4334ec4b4ee5da0721365a3e1a1853c8c224bc9da2ee093826f00cfa",
+  "model": "SupersonicLabs/Julia-1",
+  "provenance": {
+    "backend": "julia",
+    "runtime": "python-cpu",
+    "model": "SupersonicLabs/Julia-1",
+    "version": "a85b127321d580d65176c89ced8273f305745d85",
+    "simulated": false
+  },
+  "inference": {
+    "durationMs": 883
+  },
+  "runtimeHash": "427b99b4ac27175cea5a66a586447e4148cb1e83213034a7366f3f37c78dfc9d",
+  "executionStateHash": "cc8fa6878383b7d12c6412b57ab03aba9000f55859bec5e7be98f499c5ce7d7c",
+  "bindingHash": "7ccce3885433e464b80f52b1421e3afc291cc33c8e8541326d0e3bf3fe727759",
+  "question": "Find the nearest landmark for each Los Angeles demo point.",
+  "semanticContext": {
+    "intent": "Find the nearest landmark for each Los Angeles demo point.",
+    "viewport": {
+      "bbox": [
+        -118.53316549263107,
+        33.94242722259753,
+        -117.92911378598407,
+        34.168869006560286
+      ],
+      "zoom": 10.804071642834613,
+      "bearing": 0,
+      "pitch": 0
+    },
+    "layers": [
+      {
+        "id": "la-demo-points",
+        "name": "Los Angeles demo points",
+        "geometryType": "Point",
+        "geometryTypes": [
+          "Point"
+        ],
+        "featureCount": 8,
+        "fields": [
+          {
+            "name": "dataset",
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          }
+        ],
+        "fieldCount": 2,
+        "extent": [
+          -118.396,
+          33.962,
+          -118.211,
+          34.101
+        ],
+        "provenance": {
+          "kind": "source"
+        },
+        "capabilities": [
+          "buffer",
+          "export",
+          "filter",
+          "nearest",
+          "select"
+        ]
+      },
+      {
+        "id": "la-landmarks",
+        "name": "Synthetic landmarks",
+        "geometryType": "Point",
+        "geometryTypes": [
+          "Point"
+        ],
+        "featureCount": 3,
+        "fields": [
+          {
+            "name": "kind",
+            "type": "string"
+          },
+          {
+            "name": "name",
+            "type": "string"
+          }
+        ],
+        "fieldCount": 2,
+        "extent": [
+          -118.29,
+          34.04,
+          -118.243,
+          34.09
+        ],
+        "provenance": {
+          "kind": "source"
+        },
+        "capabilities": [
+          "buffer",
+          "export",
+          "filter",
+          "nearest",
+          "select"
+        ]
+      }
+    ],
+    "selection": {
+      "count": 0,
+      "featureIds": [],
+      "omittedCount": 0
+    },
+    "activeResultLayerIds": [],
+    "previousActions": [],
+    "previousActionCount": 0
+  },
+  "decisions": {
+    "action": {
+      "id": "action",
+      "label": "Operation",
+      "question": "Choose the available spatial operation that best advances the user's goal.",
+      "currentValue": null,
+      "optionLabels": {
+        "buffer": "buffer",
+        "nearest": "nearest",
+        "filter": "filter",
+        "select": "select",
+        "export": "export"
+      },
+      "policy": {
+        "kind": "winner",
+        "applyAt": 0.8,
+        "reviewAt": 0.55,
+        "minMargin": 0.15
+      },
+      "probabilities": {
+        "buffer": 0.27256049327000653,
+        "nearest": 0.5792402674943617,
+        "filter": 0.06738098989885619,
+        "select": 0.048581445169646596,
+        "export": 0.03223680416712899
+      },
+      "disposition": "review",
+      "reason": "Policy review: winner probability and reported confidence is 58%.",
+      "changed": true,
+      "provenance": {
+        "model": "SupersonicLabs/Julia-1",
+        "reportedOptionId": "nearest"
+      },
+      "confidence": 0.5792402674943617,
+      "selectedOptionId": "nearest",
+      "selectedValue": "nearest",
+      "effectiveConfidence": 0.5792402674943617
+    },
+    "layer": {
+      "id": "layer",
+      "label": "Input layer",
+      "question": "Choose the input layer for this operation.",
+      "currentValue": null,
+      "optionLabels": {
+        "la-demo-points": "Los Angeles demo points",
+        "la-landmarks": "Synthetic landmarks"
+      },
+      "policy": {
+        "kind": "winner",
+        "applyAt": 0.8,
+        "reviewAt": 0.55,
+        "minMargin": 0.2
+      },
+      "probabilities": {
+        "la-demo-points": 0.01474905132581777,
+        "la-landmarks": 0.9852509486741822
+      },
+      "disposition": "apply",
+      "reason": "Policy apply: winner probability and reported confidence is 99%.",
+      "changed": true,
+      "provenance": {
+        "model": "SupersonicLabs/Julia-1",
+        "reportedOptionId": "la-landmarks"
+      },
+      "confidence": 0.9852509486741822,
+      "selectedOptionId": "la-landmarks",
+      "selectedValue": "la-landmarks",
+      "effectiveConfidence": 0.9852509486741822
+    },
+    "overlay": {
+      "id": "overlay",
+      "label": "Target layer",
+      "question": "Choose a distinct layer for the pairwise operation.",
+      "currentValue": null,
+      "optionLabels": {
+        "la-demo-points": "Los Angeles demo points"
+      },
+      "policy": {
+        "kind": "winner",
+        "applyAt": 0.8,
+        "reviewAt": 0.55,
+        "minMargin": 0.2
+      },
+      "probabilities": {
+        "la-demo-points": 1
+      },
+      "disposition": "apply",
+      "reason": "Policy apply: winner probability and reported confidence is 100%.",
+      "changed": true,
+      "provenance": {
+        "model": "SupersonicLabs/Julia-1",
+        "reportedOptionId": "la-demo-points"
+      },
+      "confidence": 1,
+      "selectedOptionId": "la-demo-points",
+      "selectedValue": "la-demo-points",
+      "effectiveConfidence": 1
+    }
+  },
+  "stateDiff": {
+    "layer": "la-landmarks",
+    "overlay": "la-demo-points"
+  },
+  "decisionPayloads": [
+    {
+      "model": "SupersonicLabs/Julia-1",
+      "state": {
+        "intent": "Find the nearest landmark for each Los Angeles demo point.",
+        "viewport": {
+          "bbox": [
+            -118.53316549263107,
+            33.94242722259753,
+            -117.92911378598407,
+            34.168869006560286
+          ],
+          "zoom": 10.804071642834613,
+          "bearing": 0,
+          "pitch": 0
+        },
+        "layers": [
+          {
+            "id": "la-demo-points",
+            "name": "Los Angeles demo points",
+            "geometryType": "Point",
+            "geometryTypes": [
+              "Point"
+            ],
+            "featureCount": 8,
+            "fields": [
+              {
+                "name": "dataset",
+                "type": "string"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              }
+            ],
+            "fieldCount": 2,
+            "extent": [
+              -118.396,
+              33.962,
+              -118.211,
+              34.101
+            ],
+            "provenance": {
+              "kind": "source"
+            },
+            "capabilities": [
+              "buffer",
+              "export",
+              "filter",
+              "nearest",
+              "select"
+            ]
+          },
+          {
+            "id": "la-landmarks",
+            "name": "Synthetic landmarks",
+            "geometryType": "Point",
+            "geometryTypes": [
+              "Point"
+            ],
+            "featureCount": 3,
+            "fields": [
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              }
+            ],
+            "fieldCount": 2,
+            "extent": [
+              -118.29,
+              34.04,
+              -118.243,
+              34.09
+            ],
+            "provenance": {
+              "kind": "source"
+            },
+            "capabilities": [
+              "buffer",
+              "export",
+              "filter",
+              "nearest",
+              "select"
+            ]
+          }
+        ],
+        "selection": {
+          "count": 0,
+          "featureIds": [],
+          "omittedCount": 0
+        },
+        "activeResultLayerIds": [],
+        "previousActions": [],
+        "previousActionCount": 0,
+        "proposedValues": {},
+        "decisionFields": {
+          "action": {
+            "label": "Operation",
+            "currentValue": null,
+            "allowKeep": false,
+            "policy": {
+              "kind": "winner",
+              "applyAt": 0.8,
+              "reviewAt": 0.55,
+              "minMargin": 0.15
+            }
+          }
+        }
+      },
+      "questions": {
+        "action": {
+          "type": "choice",
+          "instructions": "Choose the available spatial operation that best advances the user's goal.",
+          "criteria": {
+            "buffer": "Create a distance zone around input features.",
+            "nearest": "Find the closest features between layers.",
+            "filter": "Filter a layer using deterministic attribute criteria.",
+            "select": "Select a set of features on the map.",
+            "export": "Export a result layer as GeoJSON."
+          }
+        }
+      }
+    },
+    {
+      "model": "SupersonicLabs/Julia-1",
+      "state": {
+        "intent": "Find the nearest landmark for each Los Angeles demo point.",
+        "viewport": {
+          "bbox": [
+            -118.53316549263107,
+            33.94242722259753,
+            -117.92911378598407,
+            34.168869006560286
+          ],
+          "zoom": 10.804071642834613,
+          "bearing": 0,
+          "pitch": 0
+        },
+        "layers": [
+          {
+            "id": "la-demo-points",
+            "name": "Los Angeles demo points",
+            "geometryType": "Point",
+            "geometryTypes": [
+              "Point"
+            ],
+            "featureCount": 8,
+            "fields": [
+              {
+                "name": "dataset",
+                "type": "string"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              }
+            ],
+            "fieldCount": 2,
+            "extent": [
+              -118.396,
+              33.962,
+              -118.211,
+              34.101
+            ],
+            "provenance": {
+              "kind": "source"
+            },
+            "capabilities": [
+              "buffer",
+              "export",
+              "filter",
+              "nearest",
+              "select"
+            ]
+          },
+          {
+            "id": "la-landmarks",
+            "name": "Synthetic landmarks",
+            "geometryType": "Point",
+            "geometryTypes": [
+              "Point"
+            ],
+            "featureCount": 3,
+            "fields": [
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              }
+            ],
+            "fieldCount": 2,
+            "extent": [
+              -118.29,
+              34.04,
+              -118.243,
+              34.09
+            ],
+            "provenance": {
+              "kind": "source"
+            },
+            "capabilities": [
+              "buffer",
+              "export",
+              "filter",
+              "nearest",
+              "select"
+            ]
+          }
+        ],
+        "selection": {
+          "count": 0,
+          "featureIds": [],
+          "omittedCount": 0
+        },
+        "activeResultLayerIds": [],
+        "previousActions": [],
+        "previousActionCount": 0,
+        "proposedValues": {
+          "action": "nearest"
+        },
+        "decisionFields": {
+          "layer": {
+            "label": "Input layer",
+            "currentValue": null,
+            "allowKeep": false,
+            "policy": {
+              "kind": "winner",
+              "applyAt": 0.8,
+              "reviewAt": 0.55,
+              "minMargin": 0.2
+            }
+          }
+        }
+      },
+      "questions": {
+        "layer": {
+          "type": "choice",
+          "instructions": "Choose the input layer for this operation.",
+          "criteria": {
+            "la-demo-points": "Los Angeles demo points: 8 features, Point geometry.",
+            "la-landmarks": "Synthetic landmarks: 3 features, Point geometry."
+          }
+        }
+      }
+    },
+    {
+      "model": "SupersonicLabs/Julia-1",
+      "state": {
+        "intent": "Find the nearest landmark for each Los Angeles demo point.",
+        "viewport": {
+          "bbox": [
+            -118.53316549263107,
+            33.94242722259753,
+            -117.92911378598407,
+            34.168869006560286
+          ],
+          "zoom": 10.804071642834613,
+          "bearing": 0,
+          "pitch": 0
+        },
+        "layers": [
+          {
+            "id": "la-demo-points",
+            "name": "Los Angeles demo points",
+            "geometryType": "Point",
+            "geometryTypes": [
+              "Point"
+            ],
+            "featureCount": 8,
+            "fields": [
+              {
+                "name": "dataset",
+                "type": "string"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              }
+            ],
+            "fieldCount": 2,
+            "extent": [
+              -118.396,
+              33.962,
+              -118.211,
+              34.101
+            ],
+            "provenance": {
+              "kind": "source"
+            },
+            "capabilities": [
+              "buffer",
+              "export",
+              "filter",
+              "nearest",
+              "select"
+            ]
+          },
+          {
+            "id": "la-landmarks",
+            "name": "Synthetic landmarks",
+            "geometryType": "Point",
+            "geometryTypes": [
+              "Point"
+            ],
+            "featureCount": 3,
+            "fields": [
+              {
+                "name": "kind",
+                "type": "string"
+              },
+              {
+                "name": "name",
+                "type": "string"
+              }
+            ],
+            "fieldCount": 2,
+            "extent": [
+              -118.29,
+              34.04,
+              -118.243,
+              34.09
+            ],
+            "provenance": {
+              "kind": "source"
+            },
+            "capabilities": [
+              "buffer",
+              "export",
+              "filter",
+              "nearest",
+              "select"
+            ]
+          }
+        ],
+        "selection": {
+          "count": 0,
+          "featureIds": [],
+          "omittedCount": 0
+        },
+        "activeResultLayerIds": [],
+        "previousActions": [],
+        "previousActionCount": 0,
+        "proposedValues": {
+          "action": "nearest",
+          "layer": "la-landmarks"
+        },
+        "decisionFields": {
+          "overlay": {
+            "label": "Target layer",
+            "currentValue": null,
+            "allowKeep": false,
+            "policy": {
+              "kind": "winner",
+              "applyAt": 0.8,
+              "reviewAt": 0.55,
+              "minMargin": 0.2
+            }
+          }
+        }
+      },
+      "questions": {
+        "overlay": {
+          "type": "choice",
+          "instructions": "Choose a distinct layer for the pairwise operation.",
+          "criteria": {
+            "la-demo-points": "Los Angeles demo points: 8 features, Point geometry."
+          }
+        }
+      }
+    }
+  ],
+  "modelResponses": [
+    {
+      "model": "SupersonicLabs/Julia-1",
+      "provenance": {
+        "backend": "julia",
+        "runtime": "python-cpu",
+        "simulated": false,
+        "model": "SupersonicLabs/Julia-1",
+        "version": "a85b127321d580d65176c89ced8273f305745d85"
+      },
+      "answers": {
+        "action": {
+          "type": "choice",
+          "choice": "nearest",
+          "confidence": 0.5792402674943617,
+          "probabilities": {
+            "buffer": 0.27256049327000653,
+            "nearest": 0.5792402674943617,
+            "filter": 0.06738098989885619,
+            "select": 0.048581445169646596,
+            "export": 0.03223680416712899
+          }
+        }
+      },
+      "usageReported": false,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "model": "SupersonicLabs/Julia-1",
+      "provenance": {
+        "backend": "julia",
+        "runtime": "python-cpu",
+        "simulated": false,
+        "model": "SupersonicLabs/Julia-1",
+        "version": "a85b127321d580d65176c89ced8273f305745d85"
+      },
+      "answers": {
+        "layer": {
+          "type": "choice",
+          "choice": "la-landmarks",
+          "confidence": 0.9852509486741822,
+          "probabilities": {
+            "la-demo-points": 0.01474905132581777,
+            "la-landmarks": 0.9852509486741822
+          }
+        }
+      },
+      "usageReported": false,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    },
+    {
+      "model": "SupersonicLabs/Julia-1",
+      "provenance": {
+        "backend": "julia",
+        "runtime": "python-cpu",
+        "model": "SupersonicLabs/Julia-1",
+        "version": "a85b127321d580d65176c89ced8273f305745d85",
+        "simulated": false
+      },
+      "answers": {
+        "overlay": {
+          "type": "choice",
+          "choice": "la-demo-points",
+          "confidence": 1,
+          "probabilities": {
+            "la-demo-points": 1
+          }
+        }
+      },
+      "usageReported": false,
+      "usage": {
+        "input_tokens": 0,
+        "output_tokens": 0
+      }
+    }
+  ],
+  "guard": {
+    "originalChoice": "nearest",
+    "ranking": [
+      {
+        "id": "nearest",
+        "probability": 0.5792402674943617
+      },
+      {
+        "id": "buffer",
+        "probability": 0.27256049327000653
+      },
+      {
+        "id": "filter",
+        "probability": 0.06738098989885619
+      },
+      {
+        "id": "select",
+        "probability": 0.048581445169646596
+      },
+      {
+        "id": "export",
+        "probability": 0.03223680416712899
+      }
+    ],
+    "rejected": [],
+    "fallback": false,
+    "finalChoice": "nearest"
+  },
+  "call": {
+    "tool": "nearest",
+    "args": {
+      "layerId": "la-landmarks",
+      "targetLayerId": "la-demo-points"
+    }
+  },
+  "probabilities": {
+    "action:buffer": 0.27256049327000653,
+    "action:nearest": 0.5792402674943617,
+    "action:filter": 0.06738098989885619,
+    "action:select": 0.048581445169646596,
+    "action:export": 0.03223680416712899,
+    "layer:la-demo-points": 0.01474905132581777,
+    "layer:la-landmarks": 0.9852509486741822,
+    "overlay:la-demo-points": 1
+  },
+  "confidence": 0.5792402674943617,
+  "selectedAction": "nearest",
+  "args": {
+    "layerId": "la-landmarks",
+    "targetLayerId": "la-demo-points"
+  },
+  "validation": {
+    "valid": false,
+    "warnings": []
+  },
+  "execution": {
+    "success": false,
+    "durationMs": 0,
+    "status": "pending",
+    "error": "Review the proposed call before execution."
+  }
+}

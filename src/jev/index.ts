@@ -1,3 +1,5 @@
+import type { DecisionProvenance } from "./providers.js";
+
 export interface ChoiceQuestion {
   type: "choice";
   instructions?: string | Record<string, unknown> | unknown[] | null;
@@ -51,7 +53,9 @@ export type JevAnswer = ChoiceAnswer | NoulAnswer | ScoreAnswer;
 
 export interface SystemOneResponse {
   model: string;
+  provenance?: DecisionProvenance;
   usageReported?: boolean;
+  answerSources?: Record<string, "model" | "deterministic">;
   answers: Record<string, JevAnswer>;
   usage: {
     input_tokens: number;
